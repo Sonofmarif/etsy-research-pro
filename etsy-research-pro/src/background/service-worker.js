@@ -407,7 +407,6 @@ async function runResearchPipeline(keyword, productType = 'any') {
 
     // Step 4: Try eRank enhancement (optional)
     let erankData = null;
-    const config = await loadConfig();
     if (config.erank_enabled) {
       try {
         await updateState({ progress: 'Checking eRank...' });
