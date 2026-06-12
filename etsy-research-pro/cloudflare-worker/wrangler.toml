@@ -1,0 +1,21 @@
+name = "etsy-research-pro"
+main = "worker.js"
+compatibility_date = "2026-06-01"
+
+# Environment variables
+[vars]
+# Optional: Add environment variables if needed
+
+[[d1_databases]]
+binding = "DB"
+database_name = "etsy-research-pro-db"
+database_id = "789a97ea-c8e3-46e8-a879-e0c032774986" # Replace with the ID returned by D1 creation
+migrations_dir = "./"
+
+[[kv_namespaces]]
+binding = "NICHE_CACHE"
+id = "ca86934ca33d406a853c4a661d2540f8"
+
+# [[analytics_engine_datasets]]
+# binding = "ANALYTICS"
+# dataset = "etsy_search_trends"

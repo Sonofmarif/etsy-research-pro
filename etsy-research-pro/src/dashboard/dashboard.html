@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Etsy Research Pro — SaaS Command Center</title>
+  <meta name="description" content="Research dashboard with 90-day history, niche trends, and performance analytics for Etsy sellers.">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <!-- ─── Header ─── -->
+  <header class="dash-header" id="dash-header">
+    <div class="header-content">
+      <div class="brand">
+        <div class="brand-icon-wrap">
+          <span class="brand-icon">📊</span>
+          <div class="brand-icon-glow"></div>
+        </div>
+        <div>
+          <h1 id="header-title">Etsy Research Pro</h1>
+          <span class="brand-sub">SaaS Workspace · Hyderabad, Pakistan</span>
+        </div>
+      </div>
+      
+      <!-- Connection Status & Tool Integration Panel -->
+      <div class="status-panel">
+        <div class="status-group">
+          <span class="status-badge red" id="status-kv">KV Cache: Off</span>
+          <span class="status-badge red" id="status-db">D1 DB: Off</span>
+          <span class="status-badge green" id="status-scraper">Scraper: Active</span>
+        </div>
+        <div class="status-group tool-integrations">
+          <span class="tool-badge disconnected" id="badge-erank">eRank: Out</span>
+          <span class="tool-badge disconnected" id="badge-alura">Alura: Out</span>
+        </div>
+      </div>
+
+      <div class="header-stats" id="header-stats">
+        <div class="header-stat">
+          <span class="stat-num" id="total-runs" data-target="0">0</span>
+          <span class="stat-desc">Total Runs</span>
+        </div>
+        <div class="header-stat">
+          <span class="stat-num" id="total-niches" data-target="0">0</span>
+          <span class="stat-desc">Niches Found</span>
+        </div>
+        <div class="header-stat">
+          <span class="stat-num" id="avg-score" data-target="0">0</span>
+          <span class="stat-desc">Avg Score</span>
+        </div>
+        <div class="header-stat">
+          <span class="stat-num accent" id="total-wins" data-target="0">0</span>
+          <span class="stat-desc">Total Wins</span>
+        </div>
+      </div>
+    </div>
+    <!-- Animated gradient bar -->
+    <div class="header-gradient-bar"></div>
+  </header>
+
+  <!-- ─── UX Recommendation Bar ─── -->
+  <div class="recommendation-bar" id="recommendation-bar" style="display: none;">
+    <div class="recommendation-content">
+      <span>💡 Tip: Log into your free eRank or Alura account in another tab to unlock advanced competition mapping automatically!</span>
+    </div>
+  </div>
+
+  <!-- ─── Controls & Global Filters Bar ─── -->
+  <div class="controls-bar" id="controls-bar">
+    <div class="controls-content">
+      <div class="filter-group">
+        <div class="filter-item">
+          <label for="date-from">From</label>
+          <input type="date" id="date-from" class="filter-input" title="From date">
+        </div>
+        <span class="filter-sep">→</span>
+        <div class="filter-item">
+          <label for="date-to">To</label>
+          <input type="date" id="date-to" class="filter-input" title="To date">
+        </div>
+        <div class="filter-item">
+          <label for="filter-type">Type</label>
+          <select id="filter-type" class="filter-select">
+            <option value="all">All Types</option>
+            <option value="digital">Digital</option>
+            <option value="physical">Physical</option>
+            <option value="pod">POD</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <label for="filter-min-score">Min Score</label>
+          <input type="number" id="filter-min-score" class="filter-input filter-narrow" placeholder="0" min="0" max="100">
+        </div>
+        <button class="btn btn-filter" id="btn-apply-filter">
+          <span class="btn-glow"></span>
+          🔍 Apply Filters
+        </button>
+      </div>
+      <div class="action-group">
+        <button class="btn btn-export" id="btn-export-all">📄 Export All</button>
+        <button class="btn btn-clear" id="btn-clear-all">🗑 Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Main Content Grid ─── -->
+  <main class="dash-main" id="dash-main">
+
+    <!-- Workspace Columns -->
+    <div class="workspace-grid">
+      
+      <!-- Left Column: Command Centers -->
+      <div class="workspace-col col-left">
+        
+        <!-- 1. Keyword Research Command Center -->
+        <div class="card glass-card workspace-card" id="card-research">
+          <div class="card-header">
+            <h3>🔍 Keyword Research Command Center</h3>
+          </div>
+          <div class="card-body">
+            <div class="form-row">
+              <label class="form-label" for="interest-select">What do you want to sell?</label>
+              <div class="input-group">
+                <select id="interest-select" class="styled-select">
+                  <option value="">Choose a category...</option>
+                  <option value="Islamic/Spiritual">🕌 Islamic / Spiritual</option>
+                  <option value="Home Decor">🏠 Home Decor</option>
+                  <option value="Pet Products">🐾 Pet Products</option>
+                  <option value="Baby/Kids">👶 Baby / Kids</option>
+                  <option value="Wedding">💒 Wedding</option>
+                  <option value="Print-on-Demand">👕 Print-on-Demand</option>
+                  <option value="Digital Planners">📋 Digital Planners</option>
+                  <option value="Jewelry">💎 Jewelry</option>
+                  <option value="Wall Art Printables">🖼️ Wall Art Printables</option>
+                  <option value="Seasonal">🎄 Seasonal</option>
+                </select>
+                <button class="btn btn-small btn-ai-seeds" id="btn-ai-seeds" style="display:none;">
+                  ✨ AI Seeds
+                </button>
+              </div>
+            </div>
+
+            <!-- Seed Keyword Chips -->
+            <div class="form-row" id="chips-section" style="display:none">
+              <label class="form-label">Suggested Keywords <span class="label-hint">(click to search)</span></label>
+              <div class="chips-container" id="keyword-chips"></div>
+            </div>
+
+            <!-- Keyword input & Product Type Selection -->
+            <div class="form-row">
+              <label class="form-label" for="search-input">Search Keyword</label>
+              <div class="search-row">
+                <input type="text" id="search-input" class="search-input" placeholder="e.g. crystal prayer beads, printable planner, custom mug">
+                <select id="product-type-select" class="type-select" title="Product type filter">
+                  <option value="any">All Types</option>
+                  <option value="digital">Digital</option>
+                  <option value="physical">Physical</option>
+                  <option value="pod">POD</option>
+                </select>
+              </div>
+              <span class="search-error" id="search-error" style="display:none">Enter a keyword to search</span>
+            </div>
+
+            <!-- Run Control Buttons -->
+            <div class="form-row btn-row">
+              <button class="btn btn-primary btn-large" id="btn-research">
+                🚀 Start Research
+              </button>
+              <button class="btn btn-danger" id="btn-stop" disabled>
+                ⏹ Stop
+              </button>
+            </div>
+
+            <!-- Pipeline Status logs -->
+            <div class="pipeline-status" id="status-section" style="display:none">
+              <div class="status-card" id="status-card">
+                <div class="status-step" id="current-step">Initializing...</div>
+                <div class="status-detail" id="current-progress"></div>
+                <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+              </div>
+              
+              <div class="log-box">
+                <div class="log-header">
+                  <span>Pipeline Activity Log</span>
+                  <div>
+                    <button class="btn-tiny" id="btn-copy-log">Copy</button>
+                    <button class="btn-tiny" id="btn-clear-log">Clear</button>
+                  </div>
+                </div>
+                <div class="log-area" id="log-area"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Live Niche Audit & Moat Scoring Dashboard -->
+        <div class="card glass-card workspace-card" id="card-audit">
+          <div class="card-header">
+            <h3>📝 Live Niche Audit & Moat Scoring Dashboard</h3>
+          </div>
+          <div class="card-body">
+            <div class="form-row">
+              <label class="form-label" for="audit-url">Paste Etsy Listing URL</label>
+              <div class="search-row">
+                <input type="url" id="audit-url" class="search-input" placeholder="https://www.etsy.com/listing/12345...">
+                <button class="btn btn-primary" id="btn-audit">🔍 Audit SEO</button>
+              </div>
+            </div>
+
+            <!-- Audit Results View (Skeleton-ready) -->
+            <div class="audit-results" id="audit-results" style="display:none">
+              <div class="audit-score-row">
+                <div class="score-circle-wrap">
+                  <div class="score-circle" id="audit-score-circle">
+                    <span class="score-value" id="audit-overall-score">0</span>
+                    <span class="score-label">Overall</span>
+                  </div>
+                </div>
+                <div class="audit-subscores">
+                  <div class="subscore">
+                    <span class="subscore-label">Title <span id="audit-title-score">0</span></span>
+                    <div class="subscore-bar"><div class="subscore-fill" id="audit-title-bar"></div></div>
+                  </div>
+                  <div class="subscore">
+                    <span class="subscore-label">Tags <span id="audit-tags-score">0</span></span>
+                    <div class="subscore-bar"><div class="subscore-fill" id="audit-tags-bar"></div></div>
+                  </div>
+                  <div class="subscore">
+                    <span class="subscore-label">Description <span id="audit-desc-score">0</span></span>
+                    <div class="subscore-bar"><div class="subscore-fill" id="audit-desc-bar"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recommendation items -->
+              <div class="audit-details" id="audit-details"></div>
+
+              <!-- Optimized Suggestions -->
+              <div class="audit-suggestions">
+                <div class="audit-suggestion" id="audit-better-title-section" style="display:none">
+                  <h4>Suggested Title</h4>
+                  <div class="copy-box">
+                    <span id="audit-better-title"></span>
+                    <button class="btn-tiny" id="btn-copy-title">Copy</button>
+                  </div>
+                </div>
+
+                <div class="audit-suggestion" id="audit-better-tags-section" style="display:none">
+                  <h4>Suggested Tags (13)</h4>
+                  <div class="copy-box">
+                    <span id="audit-better-tags"></span>
+                    <button class="btn-tiny" id="btn-copy-tags">Copy</button>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-small" id="btn-export-audit" style="margin-top: 10px;">📦 Export Audit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Results & Snapshot View -->
+      <div class="workspace-col col-right">
+        
+        <!-- 3. Instant Listing Snapshot Manager -->
+        <div class="card glass-card workspace-card" id="card-snapshot">
+          <div class="card-header">
+            <h3>⚡ Instant Listing Snapshot Manager</h3>
+            <span class="card-badge" id="snapshot-status" style="display:none">Fresh</span>
+          </div>
+          <div class="card-body">
+            
+            <div class="results-view" id="results-section" style="display:none">
+              <!-- Stats Counters -->
+              <div class="stats-grid" id="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-value" id="stat-total">0</div>
+                  <div class="stat-label">Listings</div>
+                </div>
+                <div class="stat-card stat-win">
+                  <div class="stat-value" id="stat-wins">0</div>
+                  <div class="stat-label">Wins</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="stat-score">0</div>
+                  <div class="stat-label">Avg Score</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="stat-beatable">0/12</div>
+                  <div class="stat-label">Beatable</div>
+                </div>
+              </div>
+
+              <!-- Micro-Niche Opportunities -->
+              <h4 class="sub-title">Opportunity Clusters & Prompts</h4>
+              <div class="clusters-list" id="clusters-list"></div>
+
+              <!-- Listing table summary -->
+              <h4 class="sub-title" style="margin-top:20px;">Top Scored Competitors</h4>
+              <div class="listings-list" id="listings-list"></div>
+              
+              <div class="results-actions" style="margin-top:15px; display:flex; gap:10px;">
+                <button class="btn btn-small" id="btn-export-csv">Export CSV</button>
+                <button class="btn btn-small" id="btn-export-json">Export JSON</button>
+              </div>
+            </div>
+
+            <!-- Empty/Initial State -->
+            <div class="empty-state" id="snapshot-empty">
+              <span class="empty-icon">📊</span>
+              <p>No research snapshot loaded. Enter a keyword on the left or select a history run to display metrics here.</p>
+            </div>
+
+            <!-- Loading Skeleton (Swapped dynamically) -->
+            <div class="loading-skeleton" id="snapshot-skeleton" style="display:none">
+              <div class="skeleton-row skeleton-title"></div>
+              <div class="skeleton-grid">
+                <div class="skeleton-card animate-pulse"></div>
+                <div class="skeleton-card animate-pulse"></div>
+                <div class="skeleton-card animate-pulse"></div>
+                <div class="skeleton-card animate-pulse"></div>
+              </div>
+              <div class="skeleton-row skeleton-body animate-pulse" style="height: 120px; margin-top:20px;"></div>
+              <div class="skeleton-row skeleton-body animate-pulse" style="height: 180px; margin-top:20px;"></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Distributions & Charts -->
+    <div class="spotlight-row">
+      <div class="card glass-card spotlight-card" id="score-dist-card">
+        <div class="card-header">
+          <h3>Score Distribution</h3>
+          <span class="card-badge" id="dist-total">0 runs</span>
+        </div>
+        <div class="donut-container">
+          <canvas id="chart-donut" width="200" height="200"></canvas>
+          <div class="donut-center">
+            <span class="donut-value" id="donut-center-value">—</span>
+            <span class="donut-label">Avg Score</span>
+          </div>
+        </div>
+        <div class="donut-legend" id="donut-legend">
+          <div class="legend-item"><span class="legend-dot win"></span>WIN (70+)</div>
+          <div class="legend-item"><span class="legend-dot good"></span>GOOD (50-69)</div>
+          <div class="legend-item"><span class="legend-dot average"></span>AVG (30-49)</div>
+          <div class="legend-item"><span class="legend-dot skip"></span>SKIP (0-29)</div>
+        </div>
+      </div>
+
+      <div class="card glass-card spotlight-card niche-spotlight-card" id="niche-spotlight-card">
+        <div class="card-header">
+          <h3>🏆 Top Niche Spotlight</h3>
+        </div>
+        <div class="niche-spotlights" id="niche-spotlights">
+          <div class="empty-spotlight">
+            <span class="empty-icon">🔍</span>
+            <span>Run your first research to see top niches here</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Charts Grid -->
+    <div class="charts-row">
+      <div class="card glass-card chart-card" id="score-chart-card">
+        <div class="card-header">
+          <h3>📈 Win Scores Over Time</h3>
+          <span class="card-badge" id="chart-period">Last 30 days</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-scores-over-time" width="600" height="280"></canvas>
+        </div>
+      </div>
+      <div class="card glass-card chart-card" id="keyword-chart-card">
+        <div class="card-header">
+          <h3>🔑 Most Researched Keywords</h3>
+          <span class="card-badge" id="chart-kw-count">Top 10</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-top-keywords" width="600" height="280"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="card glass-card table-card" id="table-card">
+      <div class="table-header">
+        <div class="table-title-group">
+          <h3>📋 All Research Runs</h3>
+          <span class="table-count" id="table-count">0 runs</span>
+        </div>
+        <div class="table-search">
+          <input type="text" id="table-search-input" class="table-search-input" placeholder="Search keywords...">
+        </div>
+      </div>
+      <div class="table-wrap" id="table-wrap">
+        <table id="history-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="date">Date <span class="sort-icon">↕</span></th>
+              <th class="sortable" data-sort="keyword">Keyword <span class="sort-icon">↕</span></th>
+              <th>Type</th>
+              <th class="sortable" data-sort="score">Score <span class="sort-icon">↕</span></th>
+              <th>Listings</th>
+              <th>Wins</th>
+              <th>Beatable</th>
+              <th>AI</th>
+              <th>Trend</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+      <!-- Pagination -->
+      <div class="table-pagination" id="table-pagination">
+        <button class="btn btn-page" id="btn-prev-page" disabled>← Prev</button>
+        <span class="page-info" id="page-info">Page 1</span>
+        <button class="btn btn-page" id="btn-next-page">Next →</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ─── Footer ─── -->
+  <footer class="dash-footer">
+    <div class="footer-content">
+      <span>Etsy Research Pro v1.1.0 · SaaS Command Center · Free Forever</span>
+      <span class="footer-separator">|</span>
+      <span>Built by Muhammad Ali · Hyderabad, Pakistan</span>
+    </div>
+  </footer>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
