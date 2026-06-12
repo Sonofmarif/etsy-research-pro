@@ -356,7 +356,8 @@ async function runResearchPipeline(keyword, productType = 'any') {
 
     // Open Etsy search in a tab and extract listings
     const tabId = await openTab(searchUrl);
-    await sleep(3000); // Wait for page load
+    const delayMs = (config.delay_between_pages !== undefined ? config.delay_between_pages : 5) * 1000;
+    await sleep(delayMs); // Wait for page load using configured delay
 
     // Step 2: Scrape listings
     if (stopRequested) return;
@@ -423,16 +424,10 @@ async function runResearchPipeline(keyword, productType = 'any') {
     if (stopRequested) return;
     await updateState({ currentStep: 'AI Analysis...', progress: 'Analyzing niches...' });
 
-    let analysisResult;
-    try {
-      analysisResult = await analyzeListings(keyword, scoredListings, detectedType);
-      await log('success', `Analysis complete (source: ${analysisResult.source}) — found ${analysisResult.clusters.length} clusters`);
-    } catch (e) {
-      await log('warn', `AI analysis failed: ${e.message} — using math scoring`);
-      analysisResult = { clusters: [], source: 'math' };
-    }
-
     // Step 6: Calculate summary stats
+    const maxReviewsThreshold = config.max_shop_reviews_beatable !== undefined ? config.max_shop_reviews_beatable : 300;
+    const beatableSlots = scoredListings.slice(0, 10).filter(l => (l.shop_reviews || 0) < maxReviewsThreshold).length;
+
     const wins = scoredListings.filter(l => l.scores && l.scores.verdict === 'WIN');
     const avgScore = scoredListings.length > 0
       ? Math.round(scoredListings.reduce((sum, l) => sum + (l.scores?.win_score || 0), 0) / scoredListings.length)
@@ -440,7 +435,22 @@ async function runResearchPipeline(keyword, productType = 'any') {
     const avgPrice = scoredListings.length > 0
       ? Math.round(scoredListings.reduce((sum, l) => sum + (l.price || 0), 0) / scoredListings.length * 100) / 100
       : 0;
-    const beatableSlots = scoredListings.slice(0, 12).filter(l => (l.shop_reviews || 0) < 300).length;
+    const avgReviews = scoredListings.length > 0
+      ? Math.round(scoredListings.reduce((sum, l) => sum + (l.shop_reviews || 0), 0) / scoredListings.length)
+      : 0;
+
+    // Step 5: AI Analysis (if available)
+    if (stopRequested) return;
+    await updateState({ currentStep: 'AI Analysis...', progress: 'Analyzing niches...' });
+
+    let analysisResult;
+    try {
+      analysisResult = await analyzeListings(keyword, scoredListings, detectedType, beatableSlots);
+      await log('success', `Analysis complete (source: ${analysisResult.source}) — found ${analysisResult.clusters.length} clusters`);
+    } catch (e) {
+      await log('warn', `AI analysis failed: ${e.message} — using math scoring`);
+      analysisResult = { clusters: [], source: 'math' };
+    }
 
     const stats = {
       total: scoredListings.length,
@@ -448,6 +458,7 @@ async function runResearchPipeline(keyword, productType = 'any') {
       avg_win_score: avgScore,
       avg_price: avgPrice,
       beatable_slots: beatableSlots,
+      avg_reviews: avgReviews,
       ai_mode: analysisResult.source,
       source: erankData?.success ? 'etsy+erank' : 'etsy_only'
     };
@@ -495,6 +506,8 @@ async function runResearchPipeline(keyword, productType = 'any') {
             wins: stats.wins,
             beatable: stats.beatable_slots,
             avg_price: stats.avg_price,
+            average_reviews: stats.avg_reviews,
+            avg_reviews: stats.avg_reviews,
             ai_mode: stats.ai_mode,
             clusters: (analysisResult.clusters || []).map(c => ({
               niche: c.niche,
@@ -601,8 +614,11 @@ function sendToTab(tabId, message) {
 
 // ─── Scrape single listing URL (for SEO audit) ───────────────────────────
 async function scrapeListingUrl(url) {
+  const config = await loadConfig();
+  const delayMs = (config.delay_between_pages !== undefined ? config.delay_between_pages : 5) * 1000;
+
   const tabId = await openTab(url);
-  await sleep(4000);
+  await sleep(delayMs);
 
   try {
     const response = await sendToTab(tabId, { action: 'extractSingleListing' });

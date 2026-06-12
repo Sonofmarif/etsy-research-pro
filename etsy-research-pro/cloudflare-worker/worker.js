@@ -156,6 +156,24 @@ async function handleSaveRun(request, env, cors) {
     'INSERT INTO research_runs (keyword, product_type, win_score, total, wins, beatable, avg_price, ai_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(keyword, productType, winScore, total, wins, beatable, avgPrice, aiMode).run();
 
+  // 1b. Save snapshot payload to D1
+  const avgReviews = Math.max(0, parseInt(body.average_reviews || body.avg_reviews) || 0);
+  const snapshotPayload = JSON.stringify({
+    total_listings: total,
+    average_reviews: avgReviews,
+    beatable_slots_found: beatable,
+    searched_keyword: keyword,
+    timestamp: new Date().toISOString()
+  });
+
+  try {
+    await env.DB.prepare(
+      'INSERT INTO research_snapshots (keyword, payload) VALUES (?, ?)'
+    ).bind(keyword, snapshotPayload).run();
+  } catch (snapshotErr) {
+    console.warn('[Worker] D1 snapshot save failed:', snapshotErr.message);
+  }
+
   // 2. Update trending table in D1
   const existing = await env.DB.prepare(
     'SELECT * FROM trending_niches WHERE keyword = ?'

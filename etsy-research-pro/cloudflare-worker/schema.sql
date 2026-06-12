@@ -69,4 +69,16 @@ CREATE TABLE IF NOT EXISTS shared_niches (
 CREATE INDEX IF NOT EXISTS idx_shared_niches_score ON shared_niches(niche_score DESC);
 CREATE INDEX IF NOT EXISTS idx_shared_niches_keyword ON shared_niches(keyword);
 
+-- Table for saving research snapshots
+CREATE TABLE IF NOT EXISTS research_snapshots (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  keyword     TEXT NOT NULL,
+  payload     TEXT NOT NULL, -- JSON object string capturing aggregate metrics (total listings, average reviews, beatable slots found)
+  created_at  TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_keyword ON research_snapshots(keyword);
+CREATE INDEX IF NOT EXISTS idx_snapshots_created ON research_snapshots(created_at);
+
+
 

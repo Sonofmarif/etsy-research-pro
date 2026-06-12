@@ -15,6 +15,9 @@
       geminiStatus: $('gemini-status'),
       inputMinSearches: $('input-min-searches'),
       inputMaxCompetition: $('input-max-competition'),
+      inputDelayBetweenPages: $('input-delay-between-pages'),
+      inputMaxShopReviews: $('input-max-shop-reviews'),
+      inputMinBeatableSlots: $('input-min-beatable-slots'),
       btnOpenDashboard: $('btn-open-dashboard'),
       btnSaveSettings: $('btn-save-settings'),
       settingsSaved: $('settings-saved')
@@ -73,6 +76,9 @@
         // Threshold values
         dom.inputMinSearches.value = config.min_monthly_searches !== undefined ? config.min_monthly_searches : 500;
         dom.inputMaxCompetition.value = config.max_competition !== undefined ? config.max_competition : 25000;
+        dom.inputDelayBetweenPages.value = config.delay_between_pages !== undefined ? config.delay_between_pages : 5;
+        dom.inputMaxShopReviews.value = config.max_shop_reviews_beatable !== undefined ? config.max_shop_reviews_beatable : 300;
+        dom.inputMinBeatableSlots.value = config.min_beatable_slots !== undefined ? config.min_beatable_slots : 3;
 
         resolve();
       });
@@ -87,11 +93,17 @@
       const geminiKey = dom.inputGeminiKey.value.trim();
       const minSearches = parseInt(dom.inputMinSearches.value);
       const maxComp = parseInt(dom.inputMaxCompetition.value);
+      const delayPages = parseInt(dom.inputDelayBetweenPages.value);
+      const maxReviews = parseInt(dom.inputMaxShopReviews.value);
+      const minSlots = parseInt(dom.inputMinBeatableSlots.value);
 
       // Store settings
       config.gemini_api_key = geminiKey;
       config.min_monthly_searches = isNaN(minSearches) ? 500 : minSearches;
       config.max_competition = isNaN(maxComp) ? 25000 : maxComp;
+      config.delay_between_pages = isNaN(delayPages) ? 5 : delayPages;
+      config.max_shop_reviews_beatable = isNaN(maxReviews) ? 300 : maxReviews;
+      config.min_beatable_slots = isNaN(minSlots) ? 3 : minSlots;
 
       // Update AI provider setting based on entered keys
       if (geminiKey) {

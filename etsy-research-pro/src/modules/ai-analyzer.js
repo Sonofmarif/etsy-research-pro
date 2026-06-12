@@ -8,13 +8,16 @@ import { RateLimiter } from '../utils/rate-limiter.js';
 const rateLimiter = new RateLimiter({ maxPerMinute: 14, maxPerDay: 1400 });
 
 // ─── Cluster Analysis ─────────────────────────────────────────────────────
-export async function analyzeListings(keyword, listings, productType = 'any') {
+export async function analyzeListings(keyword, listings, productType = 'any', beatableSlots = null) {
   const config = await loadConfig();
   const keys = {
     gemini: config.gemini_api_key,
     groq: config.groq_api_key,
     provider: config.ai_provider
   };
+
+  const maxReviewsThreshold = config.max_shop_reviews_beatable !== undefined ? config.max_shop_reviews_beatable : 300;
+  const calculatedBeatable = beatableSlots !== null ? beatableSlots : listings.slice(0, 10).filter(l => (l.shop_reviews || 0) < maxReviewsThreshold).length;
 
   // Format listings for AI prompt
   const listingText = listings.map((l, i) =>
@@ -25,6 +28,7 @@ export async function analyzeListings(keyword, listings, productType = 'any') {
 
 Keyword: "${keyword}"
 Product type: ${productType}
+Beatable Slots Count (out of top 10 listings having total shop reviews < ${maxReviewsThreshold}): ${calculatedBeatable} / 10
 
 Analyze these ${listings.length} Etsy listings and group into 3-6 specific micro-niches:
 
@@ -45,6 +49,8 @@ For each micro-niche return this JSON:
   "verdict": "WIN|AVERAGE|SKIP — one line reason",
   "keywords_to_target": ["kw1","kw2","kw3"]
 }
+
+CRITICAL: Use the Beatable Slots Count (${calculatedBeatable}/10) to accurately calculate a definitive, data-backed Niche Feasibility Score ("win_score") and verdict for each micro-niche. A higher beatable slots count indicates a higher win_score.
 
 CRITICAL: For "digital" or "pod" (print-on-demand) niches, the "image_prompt" must be a highly detailed, descriptive, high-converting prompt designed for Midjourney or DALL-E to generate a premium product/artwork mock-up matching this trend (including style, lighting, camera settings, and aspect ratios like --ar 4:3 or --v 6.0).
 
@@ -276,8 +282,8 @@ function mathClusterAnalysis(keyword, listings, productType) {
 
   return Object.entries(clusters).map(([name, data]) => {
     const avgPrice = data.prices.reduce((a, b) => a + b, 0) / data.prices.length;
-    const avgReviews = data.reviews.reduce((a, b) => a + b, 0) / data.reviews.length;
-    const beatableCount = data.reviews.filter(r => r < 300).length;
+    const maxReviewsThreshold = config.max_shop_reviews_beatable !== undefined ? config.max_shop_reviews_beatable : 300;
+    const beatableCount = data.reviews.filter(r => r < maxReviewsThreshold).length;
 
     const demandScore = calculateDemandScore(data);
     const beatability = (beatableCount / data.listings.length) * 100;

@@ -15,6 +15,7 @@ const DEFAULT_CONFIG = {
   // Win Score thresholds
   max_shop_reviews_beatable: 300,
   top_n_listings: 12,
+  min_beatable_slots: 3,
 
   // Product type preference
   product_type_filter: 'any', // 'digital', 'physical', 'pod', 'any'
@@ -23,6 +24,7 @@ const DEFAULT_CONFIG = {
   erank_enabled: false,
   min_monthly_searches: 500,
   max_competition: 25000,
+  delay_between_pages: 5,
 
   // History
   max_history_runs: 500,
