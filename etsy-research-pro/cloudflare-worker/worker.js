@@ -1,4 +1,4 @@
-// Etsy Research Pro — Cloudflare Worker Backend
+// Etsy Research Pro — Cloudflare Worker Backend (v1.1.1 Production)
 // Endpoints: /health, /seeds, /save-run, /trending, /trending-niches, /check-cache, /report-error
 
 export default {
