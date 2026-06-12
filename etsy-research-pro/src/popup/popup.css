@@ -24,6 +24,10 @@
   --accent-soft: rgba(241, 100, 30, 0.08);
 
   --success: #4ade80;
+  --success-glow: rgba(74, 222, 128, 0.2);
+  --danger: #ef4444;
+  --danger-glow: rgba(239, 68, 68, 0.2);
+  
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 6px;
@@ -37,7 +41,7 @@ body {
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 13px;
   line-height: 1.5;
-  overflow: hidden;
+  overflow-y: auto;
   position: relative;
 }
 
@@ -86,7 +90,7 @@ body::before {
 
 /* ─── Main Layout ─── */
 .main-content {
-  padding: 18px 20px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -94,61 +98,189 @@ body::before {
   z-index: 2;
 }
 
-.section {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ─── Inputs & Form Fields ─── */
-.settings-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.settings-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.input-wrapper {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.styled-input, .settings-input {
-  width: 100%;
-  padding: 8px 12px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
+/* ─── Triage Alert Box ─── */
+.triage-alert {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 13px;
-  outline: none;
-  transition: var(--transition);
+  padding: 10px 12px;
+  animation: slideDown 0.3s ease-out;
 }
-.styled-input:focus, .settings-input:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(241, 100, 30, 0.15);
-}
-.settings-hint {
+.triage-alert-title {
+  color: var(--danger);
+  font-weight: 600;
   font-size: 11px;
-  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+.triage-alert-desc {
+  font-size: 12px;
+  color: var(--text-primary);
   line-height: 1.4;
 }
 
-/* API Key Status Indicator */
-.key-status {
-  font-size: 11px;
-  color: var(--text-muted);
-  display: inline-block;
-  margin-top: 2px;
-  font-weight: 500;
-  transition: var(--transition);
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.key-status.active {
+
+/* ─── Search & Actions ─── */
+.search-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.search-input-wrapper {
+  position: relative;
+}
+.search-input {
+  font-size: 14px;
+  padding: 10px 12px;
+}
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* ─── Sequential Status Pipeline ─── */
+.pipeline-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.pipeline-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.pipeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  position: relative;
+  z-index: 2;
+}
+.step-indicator {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.step-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Connector Lines */
+.pipeline-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin-top: -16px;
+  z-index: 1;
+  transition: background 0.3s ease;
+}
+
+/* State Styling classes */
+.pipeline-step.pending .step-indicator {
+  border-color: var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
+.pipeline-step.running .step-indicator {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+  animation: pulse-accent 1.5s infinite alternate;
+}
+.pipeline-step.running .step-label {
+  color: var(--accent);
+}
+
+.pipeline-step.success .step-indicator {
+  border-color: var(--success);
+  background: rgba(74, 222, 128, 0.1);
   color: var(--success);
+  box-shadow: 0 0 8px var(--success-glow);
+}
+.pipeline-step.success .step-label {
+  color: var(--text-primary);
+}
+
+.pipeline-step.failed .step-indicator {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  box-shadow: 0 0 8px var(--danger-glow);
+}
+.pipeline-step.failed .step-label {
+  color: var(--danger);
+}
+
+.pipeline-step.skipped .step-indicator {
+  border-color: var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.pipeline-step.skipped .step-label {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.pipeline-connector.active {
+  background: var(--accent);
+}
+.pipeline-connector.success {
+  background: var(--success);
+}
+
+@keyframes pulse-accent {
+  from { box-shadow: 0 0 2px var(--accent-glow); }
+  to { box-shadow: 0 0 10px var(--accent); }
+}
+
+/* Progress Text area */
+.pipeline-progress {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.progress-step-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.progress-details {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ─── Buttons ─── */
@@ -157,7 +289,7 @@ body::before {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 9px 14px;
   border: none;
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -165,15 +297,20 @@ body::before {
   cursor: pointer;
   transition: var(--transition);
   user-select: none;
+  outline: none;
+}
+.btn-flex {
+  flex: 1;
 }
 .btn-icon {
-  font-size: 15px;
+  font-size: 14px;
 }
 .btn-primary {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   color: var(--text-primary);
   backdrop-filter: blur(5px);
+  width: 100%;
 }
 .btn-primary:hover {
   background: rgba(255, 255, 255, 0.1);
@@ -190,14 +327,54 @@ body::before {
   box-shadow: 0 6px 16px rgba(241, 100, 30, 0.35);
   transform: translateY(-1px);
 }
-.btn:active {
-  transform: translateY(0);
+.btn-danger {
+  background: var(--danger);
+  color: white;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+.btn-danger:hover:not(:disabled) {
+  background: #ff5a5a;
+  transform: translateY(-1px);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
 }
 
-/* ─── Settings Accordion ─── */
-.settings-accordion {
+/* ─── Inputs & Form Fields ─── */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.settings-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.settings-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: var(--transition);
+}
+.settings-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(241, 100, 30, 0.15);
+}
+
+/* ─── Expandable Settings Accordion ─── */
+.settings-accordion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   background: var(--bg-card);
   overflow: hidden;
   transition: var(--transition);
@@ -233,12 +410,17 @@ body::before {
   border-top: 1px solid rgba(70, 70, 130, 0.15);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 .field-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.field-row-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 .field-item {
   display: flex;
@@ -250,6 +432,21 @@ body::before {
   font-weight: 500;
   color: var(--text-secondary);
 }
+.input-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.key-status {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  font-weight: 500;
+}
+.key-status.active {
+  color: var(--success);
+}
 
 /* ─── Save & Feedback ─── */
 .save-section {
@@ -258,19 +455,10 @@ body::before {
   gap: 12px;
   margin-top: 4px;
 }
-.save-status-wrapper {
-  flex: 1;
-}
 .saved-msg {
   color: var(--success);
   font-weight: 600;
   font-size: 12px;
-  animation: fadeIn 0.2s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateX(-4px); }
-  to { opacity: 1; transform: translateX(0); }
 }
 
 /* ─── Footer ─── */

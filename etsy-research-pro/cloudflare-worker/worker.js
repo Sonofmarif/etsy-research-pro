@@ -51,9 +51,44 @@ export default {
         return handleReportError(request, env, corsHeaders);
       }
 
+      if (path === '/api/logs/telemetry' && request.method === 'POST') {
+        return handleTelemetry(request, env, corsHeaders);
+      }
+
       return json({ error: 'Not found' }, corsHeaders, 404);
 
     } catch (err) {
+      console.error('[Worker Exception] Endpoint error:', err);
+      
+      // POST telemetry to /api/logs/telemetry
+      try {
+        const telemetryUrl = new URL('/api/logs/telemetry', request.url).toString();
+        await fetch(telemetryUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error_message: `Server-Side Exception: ${err.message}`,
+            stack_trace: err.stack || '',
+            url: request.url,
+            user_agent: 'Cloudflare Worker Telemetry Sync'
+          })
+        });
+      } catch (postErr) {
+        console.error('[Worker Telemetry] Loopback POST failed:', postErr.message);
+        try {
+          await env.DB.prepare(
+            'INSERT INTO error_logs (error_message, stack_trace, url, user_agent) VALUES (?, ?, ?, ?)'
+          ).bind(
+            `Server-Side Exception (Direct DB fallback): ${err.message}`,
+            err.stack || '',
+            request.url,
+            'Cloudflare Worker Direct Logging'
+          ).run();
+        } catch (dbErr) {
+          console.error('[Worker Telemetry] Direct DB fallback failed:', dbErr.message);
+        }
+      }
+
       return json({ error: 'Internal server error', message: err.message }, corsHeaders, 500);
     }
   }
@@ -373,6 +408,36 @@ async function handleReportError(request, env, cors) {
   await env.DB.prepare(
     'INSERT INTO error_logs (error_message, stack_trace, url, user_agent) VALUES (?, ?, ?, ?)'
   ).bind(errorMessage, stackTrace, pageUrl, userAgent).run();
+
+  return json({ success: true }, cors);
+}
+
+// ─── POST /api/logs/telemetry ────────────────────────────────────────────────
+async function handleTelemetry(request, env, cors) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON' }, cors, 400);
+  }
+
+  const errorMessage = sanitize(body.error_message || '').substring(0, 1000);
+  const stackTrace = sanitize(body.stack_trace || '').substring(0, 4000);
+  const pageUrl = sanitize(body.url || '').substring(0, 500);
+  const userAgent = sanitize(body.user_agent || '').substring(0, 500);
+
+  if (!errorMessage) {
+    return json({ error: 'Error message required' }, cors, 400);
+  }
+
+  try {
+    await env.DB.prepare(
+      'INSERT INTO error_logs (error_message, stack_trace, url, user_agent) VALUES (?, ?, ?, ?)'
+    ).bind(errorMessage, stackTrace, pageUrl, userAgent).run();
+  } catch (err) {
+    console.error('[Worker Telemetry] DB sync fail:', err.message);
+    return json({ error: 'Database sync failed', message: err.message }, cors, 500);
+  }
 
   return json({ success: true }, cors);
 }

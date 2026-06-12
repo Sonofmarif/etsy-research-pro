@@ -18,6 +18,61 @@
   </div>
 
   <div class="main-content">
+    <!-- Layout Fix Warning Alert -->
+    <div class="triage-alert" id="triage-alert" style="display: none;">
+      <div class="triage-alert-title">⚠️ Scraping Layout Shift Detected</div>
+      <div class="triage-alert-desc" id="triage-alert-desc">Selector mismatch. Check logs.</div>
+    </div>
+
+    <!-- Keyword Input & Run Actions -->
+    <div class="search-section">
+      <div class="settings-group">
+        <label class="settings-label" for="input-keyword">Seed Keyword</label>
+        <div class="search-input-wrapper">
+          <input type="text" id="input-keyword" class="settings-input search-input" placeholder="e.g. ramadan planner, nurse svg" autocomplete="off">
+        </div>
+      </div>
+      <div class="action-buttons">
+        <button class="btn btn-accent btn-flex" id="btn-start-pipeline">
+          <span class="btn-icon">⚡</span> Start Research
+        </button>
+        <button class="btn btn-danger btn-flex" id="btn-stop-pipeline" disabled>
+          <span class="btn-icon">🛑</span> Stop
+        </button>
+      </div>
+    </div>
+
+    <!-- Sequential Status Pipeline -->
+    <div class="pipeline-section" id="pipeline-section">
+      <div class="pipeline-flow">
+        <div class="pipeline-step" id="step-find-keyword">
+          <div class="step-indicator">○</div>
+          <span class="step-label">Find Keyword</span>
+        </div>
+        <div class="pipeline-connector" id="conn-find-keyword"></div>
+        <div class="pipeline-step" id="step-snapshot">
+          <div class="step-indicator">○</div>
+          <span class="step-label">Snapshot</span>
+        </div>
+        <div class="pipeline-connector" id="conn-snapshot"></div>
+        <div class="pipeline-step" id="step-listing-audit">
+          <div class="step-indicator">○</div>
+          <span class="step-label">Listing Audit</span>
+        </div>
+        <div class="pipeline-connector" id="conn-listing-audit"></div>
+        <div class="pipeline-step" id="step-final-report">
+          <div class="step-indicator">○</div>
+          <span class="step-label">Gemini Report</span>
+        </div>
+      </div>
+      
+      <!-- Current Step Logs / Progress -->
+      <div class="pipeline-progress">
+        <div class="progress-step-name" id="progress-step-name">Idle</div>
+        <div class="progress-details" id="progress-details">Enter keyword and click Start Research</div>
+      </div>
+    </div>
+
     <!-- Primary Action: Open Full Dashboard -->
     <div class="action-section">
       <button class="btn btn-primary" id="btn-open-dashboard">
@@ -25,32 +80,31 @@
       </button>
     </div>
 
-    <!-- Basic Configuration: Gemini API Key -->
-    <div class="settings-group">
-      <label class="settings-label" for="input-gemini-key">Gemini API Key</label>
-      <div class="input-wrapper">
-        <input type="password" id="input-gemini-key" class="settings-input" placeholder="Paste your Gemini API key" autocomplete="off">
-        <span class="key-status" id="gemini-status">Not configured</span>
-      </div>
-      <p class="settings-hint">Your API key remains local in your browser and is never sent to external servers.</p>
-    </div>
-
-    <!-- Settings Accordion -->
+    <!-- Expandable Settings Accordion -->
     <details class="settings-accordion" id="settings-accordion">
       <summary class="accordion-summary">
-        <span class="accordion-title">⚙️ Scraper Thresholds</span>
+        <span class="accordion-title">⚙️ Advanced Scraper Settings</span>
         <span class="accordion-chevron">▼</span>
       </summary>
       <div class="accordion-content">
+        <!-- Gemini Key -->
         <div class="field-row">
+          <div class="field-item">
+            <label class="field-label" for="input-gemini-key">Gemini API Key</label>
+            <div class="input-wrapper">
+              <input type="password" id="input-gemini-key" class="settings-input" placeholder="Paste Gemini API key" autocomplete="off">
+              <span class="key-status" id="gemini-status">Not configured</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row-2col">
           <div class="field-item">
             <label class="field-label" for="input-min-searches" title="Keep keyword recommendations with at least this search volume">
               Min Monthly Searches
             </label>
             <input type="number" id="input-min-searches" class="settings-input" value="500">
           </div>
-        </div>
-        <div class="field-row">
           <div class="field-item">
             <label class="field-label" for="input-max-competition" title="Filter out highly crowded terms exceeding this threshold">
               Max Competition
@@ -58,22 +112,22 @@
             <input type="number" id="input-max-competition" class="settings-input" value="25000">
           </div>
         </div>
-        <div class="field-row">
+
+        <div class="field-row-2col">
           <div class="field-item">
             <label class="field-label" for="input-delay-between-pages" title="Wait time (seconds) between opening listing and search pages">
-              Delay Between Pages (seconds)
+              Delay Between Pages (sec)
             </label>
             <input type="number" id="input-delay-between-pages" class="settings-input" value="5">
           </div>
-        </div>
-        <div class="field-row">
           <div class="field-item">
             <label class="field-label" for="input-max-shop-reviews" title="Shops with fewer reviews than this are considered beatable slots">
-              Beatable Shop Reviews Max Threshold
+              Beatable Reviews Max
             </label>
             <input type="number" id="input-max-shop-reviews" class="settings-input" value="300">
           </div>
         </div>
+
         <div class="field-row">
           <div class="field-item">
             <label class="field-label" for="input-min-beatable-slots" title="Minimum number of beatable slots required for a GO verdict">
@@ -82,19 +136,19 @@
             <input type="number" id="input-min-beatable-slots" class="settings-input" value="3">
           </div>
         </div>
+
+        <!-- Save Controls -->
+        <div class="save-section">
+          <button class="btn btn-accent" id="btn-save-settings">Save Settings</button>
+          <span class="saved-msg" id="settings-saved" style="display:none">✓ Saved!</span>
+        </div>
       </div>
     </details>
-
-    <!-- Save Controls -->
-    <div class="save-section">
-      <button class="btn btn-accent" id="btn-save-settings">Save Settings</button>
-      <span class="saved-msg" id="settings-saved" style="display:none">✓ Settings Saved!</span>
-    </div>
   </div>
 
   <!-- Footer -->
   <div class="footer">
-    <span>v1.0.0</span>
+    <span>v1.2.0</span>
     <span class="footer-credits">Etsy Research Pro · Free & Open Source</span>
   </div>
 

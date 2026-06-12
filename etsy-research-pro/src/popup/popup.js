@@ -1,5 +1,5 @@
 // Etsy Research Pro — Extension Popup Controller
-// Sleek, compact UI managing core extension options and launching the dashboard.
+// Sleek, compact UI managing core extension options, pipeline actions, and status tracking.
 
 (function () {
   'use strict';
@@ -8,9 +8,16 @@
   const $ = id => document.getElementById(id);
 
   let dom = {};
+  let pollInterval = null;
 
   function initDomReferences() {
     dom = {
+      inputKeyword: $('input-keyword'),
+      btnStartPipeline: $('btn-start-pipeline'),
+      btnStopPipeline: $('btn-stop-pipeline'),
+      btnOpenDashboard: $('btn-open-dashboard'),
+      
+      // Settings
       inputGeminiKey: $('input-gemini-key'),
       geminiStatus: $('gemini-status'),
       inputMinSearches: $('input-min-searches'),
@@ -18,9 +25,25 @@
       inputDelayBetweenPages: $('input-delay-between-pages'),
       inputMaxShopReviews: $('input-max-shop-reviews'),
       inputMinBeatableSlots: $('input-min-beatable-slots'),
-      btnOpenDashboard: $('btn-open-dashboard'),
       btnSaveSettings: $('btn-save-settings'),
-      settingsSaved: $('settings-saved')
+      settingsSaved: $('settings-saved'),
+
+      // Triage alert
+      triageAlert: $('triage-alert'),
+      triageAlertDesc: $('triage-alert-desc'),
+
+      // Pipeline UI
+      stepFindKeyword: $('step-find-keyword'),
+      stepSnapshot: $('step-snapshot'),
+      stepListingAudit: $('step-listing-audit'),
+      stepFinalReport: $('step-final-report'),
+      
+      connFindKeyword: $('conn-find-keyword'),
+      connSnapshot: $('conn-snapshot'),
+      connListingAudit: $('conn-listing-audit'),
+      
+      progressStepName: $('progress-step-name'),
+      progressDetails: $('progress-details')
     };
   }
 
@@ -29,15 +52,15 @@
     initDomReferences();
     initHandlers();
     await loadSettings();
+    startPollingState();
   }
 
   // ─── Event Handlers ──────────────────────────────────────────────────────
   function initHandlers() {
-    // Open Dashboard Button
     dom.btnOpenDashboard.addEventListener('click', openDashboard);
-
-    // Save Settings Button
     dom.btnSaveSettings.addEventListener('click', saveSettings);
+    dom.btnStartPipeline.addEventListener('click', startPipeline);
+    dom.btnStopPipeline.addEventListener('click', stopPipeline);
   }
 
   // ─── Open Dashboard ──────────────────────────────────────────────────────
@@ -45,14 +68,12 @@
     const dashboardUrl = chrome.runtime.getURL('src/dashboard/dashboard.html');
     chrome.tabs.query({ url: dashboardUrl }, (tabs) => {
       if (tabs.length > 0) {
-        // Focus existing dashboard tab
         chrome.tabs.update(tabs[0].id, { active: true });
         chrome.windows.update(tabs[0].windowId, { drawAttention: true, focused: true });
       } else {
-        // Open new dashboard tab
         chrome.tabs.create({ url: dashboardUrl });
       }
-      window.close(); // Close the popup UI
+      window.close();
     });
   }
 
@@ -62,7 +83,6 @@
       chrome.storage.local.get('config', (result) => {
         const config = result.config || {};
 
-        // Gemini Key
         if (config.gemini_api_key) {
           dom.inputGeminiKey.value = config.gemini_api_key;
           dom.geminiStatus.textContent = '✓ Key saved';
@@ -73,7 +93,6 @@
           dom.geminiStatus.className = 'key-status';
         }
 
-        // Threshold values
         dom.inputMinSearches.value = config.min_monthly_searches !== undefined ? config.min_monthly_searches : 500;
         dom.inputMaxCompetition.value = config.max_competition !== undefined ? config.max_competition : 25000;
         dom.inputDelayBetweenPages.value = config.delay_between_pages !== undefined ? config.delay_between_pages : 5;
@@ -97,7 +116,6 @@
       const maxReviews = parseInt(dom.inputMaxShopReviews.value);
       const minSlots = parseInt(dom.inputMinBeatableSlots.value);
 
-      // Store settings
       config.gemini_api_key = geminiKey;
       config.min_monthly_searches = isNaN(minSearches) ? 500 : minSearches;
       config.max_competition = isNaN(maxComp) ? 25000 : maxComp;
@@ -105,21 +123,16 @@
       config.max_shop_reviews_beatable = isNaN(maxReviews) ? 300 : maxReviews;
       config.min_beatable_slots = isNaN(minSlots) ? 3 : minSlots;
 
-      // Update AI provider setting based on entered keys
       if (geminiKey) {
         config.ai_provider = 'gemini';
-      } else if (config.groq_api_key) {
-        config.ai_provider = 'groq';
       } else {
         config.ai_provider = 'none';
       }
 
       chrome.storage.local.set({ config }, () => {
-        // Update key status indicators
         dom.geminiStatus.textContent = geminiKey ? '✓ Key saved' : 'Not configured';
         dom.geminiStatus.className = geminiKey ? 'key-status active' : 'key-status';
 
-        // Display flash success message
         dom.settingsSaved.style.display = 'inline-block';
         setTimeout(() => {
           dom.settingsSaved.style.display = 'none';
@@ -127,6 +140,145 @@
       });
     });
   }
+
+  // ─── Start Pipeline ──────────────────────────────────────────────────────
+  function startPipeline() {
+    const keyword = dom.inputKeyword.value.trim();
+    if (!keyword) {
+      dom.inputKeyword.focus();
+      return;
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'startPipeline',
+      seedKeyword: keyword,
+      mode: 'full'
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[ERP] Failed to start pipeline:', chrome.runtime.lastError.message);
+        return;
+      }
+      if (response && response.started) {
+        console.log('[ERP] Pipeline started successfully');
+        dom.btnStartPipeline.disabled = true;
+        dom.btnStopPipeline.disabled = false;
+        dom.inputKeyword.disabled = true;
+      } else {
+        console.warn('[ERP] Pipeline start rejected:', response?.reason);
+      }
+    });
+  }
+
+  // ─── Stop Pipeline ───────────────────────────────────────────────────────
+  function stopPipeline() {
+    dom.btnStopPipeline.disabled = true;
+    chrome.runtime.sendMessage({ action: 'stopPipeline' }, (response) => {
+      if (response && response.stopped) {
+        console.log('[ERP] Pipeline stopped successfully');
+        dom.btnStartPipeline.disabled = false;
+        dom.inputKeyword.disabled = false;
+      }
+    });
+  }
+
+  // ─── State Polling ────────────────────────────────────────────────────────
+  function startPollingState() {
+    pollState();
+    pollInterval = setInterval(pollState, 1000);
+  }
+
+  function pollState() {
+    chrome.runtime.sendMessage({ action: 'getState' }, (state) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[ERP] Failed to fetch state:', chrome.runtime.lastError.message);
+        return;
+      }
+
+      if (!state) return;
+
+      // Update keyword input if running
+      if (state.running) {
+        dom.btnStartPipeline.disabled = true;
+        dom.btnStopPipeline.disabled = false;
+        dom.inputKeyword.disabled = true;
+        if (state.keyword && !dom.inputKeyword.value) {
+          dom.inputKeyword.value = state.keyword;
+        }
+      } else {
+        dom.btnStartPipeline.disabled = false;
+        dom.btnStopPipeline.disabled = true;
+        dom.inputKeyword.disabled = false;
+      }
+
+      // Update text progress logs
+      dom.progressStepName.textContent = state.currentStep || (state.running ? 'Running...' : 'Idle');
+      dom.progressDetails.textContent = state.progress || (state.running ? '' : 'Enter seed keyword and click Start Research');
+
+      // Update layout triage warning box
+      if (state.layoutFixNotification) {
+        dom.triageAlertDesc.textContent = state.layoutFixNotification;
+        dom.triageAlert.style.display = 'block';
+      } else {
+        dom.triageAlert.style.display = 'none';
+      }
+
+      // Update step visual elements
+      const steps = state.steps || {
+        find_keyword: 'pending',
+        snapshot: 'pending',
+        listing_audit: 'pending',
+        final_report: 'pending'
+      };
+
+      updateStepUI(dom.stepFindKeyword, steps.find_keyword, '1');
+      updateStepUI(dom.stepSnapshot, steps.snapshot, '2');
+      updateStepUI(dom.stepListingAudit, steps.listing_audit, '3');
+      updateStepUI(dom.stepFinalReport, steps.final_report, '4');
+
+      // Connectors
+      updateConnectorUI(dom.connFindKeyword, steps.find_keyword, steps.snapshot);
+      updateConnectorUI(dom.connSnapshot, steps.snapshot, steps.listing_audit);
+      updateConnectorUI(dom.connListingAudit, steps.listing_audit, steps.final_report);
+    });
+  }
+
+  function updateStepUI(element, status, defaultText) {
+    if (!element) return;
+    element.className = `pipeline-step ${status || 'pending'}`;
+    const indicator = element.querySelector('.step-indicator');
+    if (indicator) {
+      if (status === 'success') {
+        indicator.textContent = '✓';
+      } else if (status === 'failed') {
+        indicator.textContent = '✗';
+      } else if (status === 'skipped') {
+        indicator.textContent = '—';
+      } else if (status === 'running') {
+        indicator.textContent = '●';
+      } else {
+        indicator.textContent = defaultText;
+      }
+    }
+  }
+
+  function updateConnectorUI(connector, prevStepStatus, nextStepStatus) {
+    if (!connector) return;
+    connector.className = 'pipeline-connector';
+    if (prevStepStatus === 'success' || prevStepStatus === 'skipped') {
+      if (nextStepStatus === 'running' || nextStepStatus === 'success' || nextStepStatus === 'skipped') {
+        connector.classList.add('success');
+      } else {
+        connector.classList.add('active');
+      }
+    } else if (prevStepStatus === 'running') {
+      connector.classList.add('active');
+    }
+  }
+
+  // Cleanup on unload
+  window.addEventListener('unload', () => {
+    if (pollInterval) clearInterval(pollInterval);
+  });
 
   // Start controller
   document.addEventListener('DOMContentLoaded', init);

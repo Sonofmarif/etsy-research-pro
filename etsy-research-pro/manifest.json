@@ -17,12 +17,18 @@
   "content_scripts": [
     {
       "matches": ["https://www.etsy.com/*"],
-      "js": ["src/content-scripts/etsy-search-extractor.js"],
+      "js": [
+        "src/content-scripts/etsy-search-extractor.js",
+        "src/content-scripts/etsy-listing-extractor.js"
+      ],
       "run_at": "document_idle"
     },
     {
       "matches": ["https://members.erank.com/*"],
-      "js": ["src/content-scripts/erank-extractor.js"],
+      "js": [
+        "src/content-scripts/erank-keyword-extractor.js",
+        "src/content-scripts/erank-listing-audit-extractor.js"
+      ],
       "run_at": "document_idle"
     }
   ],
