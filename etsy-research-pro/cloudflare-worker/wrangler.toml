@@ -19,3 +19,5 @@ id = "ca86934ca33d406a853c4a661d2540f8"
 # [[analytics_engine_datasets]]
 # binding = "ANALYTICS"
 # dataset = "etsy_search_trends"
+
+# ci-tweak: rebuild trigger after secret fix
