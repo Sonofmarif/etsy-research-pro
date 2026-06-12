@@ -32,7 +32,8 @@ const DEFAULT_CONFIG = {
 
   // Cloudflare Worker - Updated to your live URL
   worker_url: 'https://etsy-research-pro.sonofmarif.workers.dev', 
-  community_sharing: false
+  community_sharing: false,
+  webhook_url: ''
 };
 
 // ─── Interest categories with built-in seed keywords ──────────────────────

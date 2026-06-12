@@ -25,6 +25,7 @@
       inputDelayBetweenPages: $('input-delay-between-pages'),
       inputMaxShopReviews: $('input-max-shop-reviews'),
       inputMinBeatableSlots: $('input-min-beatable-slots'),
+      inputWebhookUrl: $('input-webhook-url'),
       btnSaveSettings: $('btn-save-settings'),
       settingsSaved: $('settings-saved'),
 
@@ -98,6 +99,7 @@
         dom.inputDelayBetweenPages.value = config.delay_between_pages !== undefined ? config.delay_between_pages : 5;
         dom.inputMaxShopReviews.value = config.max_shop_reviews_beatable !== undefined ? config.max_shop_reviews_beatable : 300;
         dom.inputMinBeatableSlots.value = config.min_beatable_slots !== undefined ? config.min_beatable_slots : 3;
+        dom.inputWebhookUrl.value = config.webhook_url || '';
 
         resolve();
       });
@@ -106,53 +108,72 @@
 
   // ─── Save Settings ───────────────────────────────────────────────────────
   function saveSettings() {
-    chrome.storage.local.get('config', (result) => {
-      const config = result.config || {};
+    return new Promise((resolve) => {
+      chrome.storage.local.get('config', (result) => {
+        const config = result.config || {};
 
-      const geminiKey = dom.inputGeminiKey.value.trim();
-      const minSearches = parseInt(dom.inputMinSearches.value);
-      const maxComp = parseInt(dom.inputMaxCompetition.value);
-      const delayPages = parseInt(dom.inputDelayBetweenPages.value);
-      const maxReviews = parseInt(dom.inputMaxShopReviews.value);
-      const minSlots = parseInt(dom.inputMinBeatableSlots.value);
+        const geminiKey = dom.inputGeminiKey.value.trim();
+        const minSearches = parseInt(dom.inputMinSearches.value);
+        const maxComp = parseInt(dom.inputMaxCompetition.value);
+        const delayPages = parseInt(dom.inputDelayBetweenPages.value);
+        const maxReviews = parseInt(dom.inputMaxShopReviews.value);
+        const minSlots = parseInt(dom.inputMinBeatableSlots.value);
+        const webhookUrl = dom.inputWebhookUrl.value.trim();
 
-      config.gemini_api_key = geminiKey;
-      config.min_monthly_searches = isNaN(minSearches) ? 500 : minSearches;
-      config.max_competition = isNaN(maxComp) ? 25000 : maxComp;
-      config.delay_between_pages = isNaN(delayPages) ? 5 : delayPages;
-      config.max_shop_reviews_beatable = isNaN(maxReviews) ? 300 : maxReviews;
-      config.min_beatable_slots = isNaN(minSlots) ? 3 : minSlots;
+        config.gemini_api_key = geminiKey;
+        config.min_monthly_searches = isNaN(minSearches) ? 500 : minSearches;
+        config.max_competition = isNaN(maxComp) ? 25000 : maxComp;
+        config.delay_between_pages = isNaN(delayPages) ? 5 : delayPages;
+        config.max_shop_reviews_beatable = isNaN(maxReviews) ? 300 : maxReviews;
+        config.min_beatable_slots = isNaN(minSlots) ? 3 : minSlots;
+        config.webhook_url = webhookUrl;
 
-      if (geminiKey) {
-        config.ai_provider = 'gemini';
-      } else {
-        config.ai_provider = 'none';
-      }
+        if (geminiKey) {
+          config.ai_provider = 'gemini';
+        } else {
+          config.ai_provider = 'none';
+        }
 
-      chrome.storage.local.set({ config }, () => {
-        dom.geminiStatus.textContent = geminiKey ? '✓ Key saved' : 'Not configured';
-        dom.geminiStatus.className = geminiKey ? 'key-status active' : 'key-status';
+        chrome.storage.local.set({ config }, () => {
+          dom.geminiStatus.textContent = geminiKey ? '✓ Key saved' : 'Not configured';
+          dom.geminiStatus.className = geminiKey ? 'key-status active' : 'key-status';
 
-        dom.settingsSaved.style.display = 'inline-block';
-        setTimeout(() => {
-          dom.settingsSaved.style.display = 'none';
-        }, 2500);
+          dom.settingsSaved.style.display = 'inline-block';
+          setTimeout(() => {
+            dom.settingsSaved.style.display = 'none';
+          }, 2500);
+          resolve();
+        });
       });
     });
   }
 
   // ─── Start Pipeline ──────────────────────────────────────────────────────
-  function startPipeline() {
+  async function startPipeline() {
     const keyword = dom.inputKeyword.value.trim();
     if (!keyword) {
       dom.inputKeyword.focus();
       return;
     }
 
+    // Save settings first to ensure background script reads fresh options
+    await saveSettings();
+
+    const options = {
+      gemini_api_key: dom.inputGeminiKey.value.trim(),
+      min_monthly_searches: parseInt(dom.inputMinSearches.value) || 500,
+      max_competition: parseInt(dom.inputMaxCompetition.value) || 25000,
+      delay_between_pages: parseInt(dom.inputDelayBetweenPages.value) || 5,
+      max_shop_reviews_beatable: parseInt(dom.inputMaxShopReviews.value) || 300,
+      min_beatable_slots: parseInt(dom.inputMinBeatableSlots.value) || 3,
+      webhook_url: dom.inputWebhookUrl.value.trim()
+    };
+
     chrome.runtime.sendMessage({
       action: 'startPipeline',
       seedKeyword: keyword,
-      mode: 'full'
+      mode: 'full',
+      options: options
     }, (response) => {
       if (chrome.runtime.lastError) {
         console.error('[ERP] Failed to start pipeline:', chrome.runtime.lastError.message);

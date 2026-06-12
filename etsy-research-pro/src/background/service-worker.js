@@ -67,6 +67,29 @@ async function log(type, msg) {
   });
 }
 
+async function sendTelemetryError(errorMessage, stackTrace, url) {
+  try {
+    const config = await loadConfig();
+    const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
+    const telemetryUrl = `${baseUrl}/api/logs/telemetry`;
+    const response = await fetch(telemetryUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error_message: errorMessage,
+        stack_trace: stackTrace || '',
+        url: url || 'Chrome Extension Background',
+        user_agent: 'Etsy Research Pro Extension'
+      })
+    });
+    if (!response.ok) {
+      console.warn('[ERP Telemetry] Worker telemetry post returned status:', response.status);
+    }
+  } catch (e) {
+    console.error('[ERP Telemetry] Failed to send telemetry error:', e.message);
+  }
+}
+
 async function setStepStatus(stepKey, status) {
   return enqueueStateUpdate(async () => {
     const state = await loadRunState();
@@ -593,8 +616,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ started: true });
           
           const runner = (msg.action === 'startResearch' || msg.mode === 'full')
-            ? runFullPipeline(seedKeyword)
-            : runSingleStep(msg.step, seedKeyword);
+            ? runFullPipeline(seedKeyword, msg.options)
+            : runSingleStep(msg.step, seedKeyword, msg.options);
             
           runner.finally(() => { pipelineRunning = false; });
         } catch (e) {
@@ -793,16 +816,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
     }
 
-    return false;
   } catch (err) {
     console.error('[ERP] service worker message listener error:', err);
+    sendTelemetryError(`onMessage error: ${err.message}`, err.stack, `onMessage:${msg?.action}`);
     sendResponse({ success: false, error: err.message });
     return false;
   }
 });
 
 // ─── Research Pipeline (Orchestrator) ──────────────────────────────────
-async function runFullPipeline(seedKeyword) {
+async function runFullPipeline(seedKeyword, options = {}) {
   startKeepalive();
   let _archived = false;
   let pipelineRunId = null;
@@ -835,7 +858,7 @@ async function runFullPipeline(seedKeyword) {
       }
     });
 
-    const config = await loadConfig();
+    const config = { ...(await loadConfig()), ...options };
     const tabId = await getOrCreateWorkTab();
 
     // Create run record
@@ -973,6 +996,7 @@ async function runFullPipeline(seedKeyword) {
 
   } catch (err) {
     await log('error', `Pipeline error: ${err.message}`);
+    await sendTelemetryError(`Pipeline error: ${err.message}`, err.stack, `runFullPipeline:${seedKeyword}`);
     const state = await loadRunState();
     const steps = state.steps || {};
     for (const [k, v] of Object.entries(steps)) {
@@ -990,7 +1014,7 @@ async function runFullPipeline(seedKeyword) {
 }
 
 // ─── Single step standalone run ───────────────────────────────────────
-async function runSingleStep(stepNum, seedKeyword) {
+async function runSingleStep(stepNum, seedKeyword, options = {}) {
   const stepNames = { 1: 'eRank Keywords', 2: 'Etsy Snapshots', 3: 'Listing Audit', 4: 'Verdict & Report' };
   startKeepalive();
   let _archived = false;
@@ -1014,7 +1038,7 @@ async function runSingleStep(stepNum, seedKeyword) {
 
   try {
     await log('info', `=== Running Step ${stepNum}: ${stepNames[stepNum]} for "${seedKeyword}" ===`);
-    const config = await loadConfig();
+    const config = { ...(await loadConfig()), ...options };
     const logFn = (type, msg) => {
       log(type, `[Step ${stepNum}] ${msg}`);
       updateState({ progress: msg });
@@ -1059,6 +1083,7 @@ async function runSingleStep(stepNum, seedKeyword) {
 
   } catch (err) {
     await log('error', `Step ${stepNum} failed: ${err.message}`);
+    await sendTelemetryError(`Step ${stepNum} failed: ${err.message}`, err.stack, `runSingleStep:${stepNum}:${seedKeyword}`);
     await updateState({ running: false, lastStatus: 'error', progress: err.message });
     await _archive('error');
   } finally {
@@ -1237,6 +1262,25 @@ async function saveFinalResults(seedKeyword, step4Result, config) {
   };
   await chrome.storage.local.set({ lastResearchResults });
 
+  if (config.webhook_url) {
+    try {
+      await log('info', `📡 Triggering webhook export to: ${config.webhook_url}`);
+      const response = await fetch(config.webhook_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lastResearchResults)
+      });
+      if (response.ok) {
+        await log('success', '✓ Webhook export complete.');
+      } else {
+        await log('warn', `Webhook returned status: ${response.status}`);
+      }
+    } catch (e) {
+      await log('error', `Failed to send webhook: ${e.message}`);
+      await sendTelemetryError(`Webhook failed: ${e.message}`, e.stack, config.webhook_url);
+    }
+  }
+
   if (config.community_sharing) {
     try {
       await fetch(`${config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev'}/save-run`, {
@@ -1265,6 +1309,7 @@ async function saveFinalResults(seedKeyword, step4Result, config) {
       await log('info', 'Anonymous run details shared with community.');
     } catch(e) {
       console.warn('[ERP] Failed to sync run to D1 worker:', e.message);
+      await sendTelemetryError(`Failed to sync run to D1 worker: ${e.message}`, e.stack, `${config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev'}/save-run`);
     }
   }
 }
