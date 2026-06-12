@@ -6,298 +6,72 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <!-- ─── Header ─── -->
+  <!-- Brand Header -->
   <div class="header">
-    <div class="header-top">
-      <div class="logo-group">
-        <div class="logo-icon">📊</div>
-        <div>
-          <h1 id="header-title">Etsy Research Pro</h1>
-          <span class="header-subtitle">Free Niche Research Tool</span>
-        </div>
+    <div class="logo-group">
+      <span class="logo-icon">📊</span>
+      <div>
+        <h1 id="header-title">Etsy Research Pro</h1>
+        <span class="header-subtitle">Niche Research Copilot</span>
       </div>
-      <div class="header-right">
-        <button class="btn-icon-link" id="btn-header-dashboard" title="Open Dashboard">
-          📈
-        </button>
-        <div class="status-pill" id="status-pill">
-          <span class="status-dot idle" id="status-dot"></span>
-          <span id="status-text">Idle</span>
-        </div>
-      </div>
-    </div>
-    <div class="header-progress" id="header-progress" style="display:none">
-      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-      <span class="progress-text" id="progress-text"></span>
     </div>
   </div>
 
-  <!-- ─── Tab Navigation ─── -->
-  <div class="tab-nav">
-    <button class="tab-btn active" data-tab="research" id="tab-btn-research">
-      <span class="tab-icon">🔍</span> Research
-    </button>
-    <button class="tab-btn" data-tab="audit" id="tab-btn-audit">
-      <span class="tab-icon">📝</span> Audit
-    </button>
-    <button class="tab-btn" data-tab="history" id="tab-btn-history">
-      <span class="tab-icon">📈</span> History
-    </button>
-    <button class="tab-btn" data-tab="settings" id="tab-btn-settings">
-      <span class="tab-icon">⚙️</span> Settings
-    </button>
-  </div>
-
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB 1: RESEARCH -->
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <div class="tab-content active" id="tab-research">
-
-    <!-- Interest Category Selector (first run) -->
-    <div class="section" id="interest-section">
-      <label class="section-label">What do you want to sell?</label>
-      <select id="interest-select" class="styled-select">
-        <option value="">Choose a category...</option>
-        <option value="Islamic/Spiritual">🕌 Islamic / Spiritual</option>
-        <option value="Home Decor">🏠 Home Decor</option>
-        <option value="Pet Products">🐾 Pet Products</option>
-        <option value="Baby/Kids">👶 Baby / Kids</option>
-        <option value="Wedding">💒 Wedding</option>
-        <option value="Print-on-Demand">👕 Print-on-Demand</option>
-        <option value="Digital Planners">📋 Digital Planners</option>
-        <option value="Jewelry">💎 Jewelry</option>
-        <option value="Wall Art Printables">🖼️ Wall Art Printables</option>
-        <option value="Seasonal">🎄 Seasonal</option>
-      </select>
-      <button class="btn btn-small btn-ai-seeds" id="btn-ai-seeds" style="display:none; margin-top: 6px;">
-        <span class="btn-icon">✨</span> Generate AI Keywords
+  <div class="main-content">
+    <!-- Primary Action: Open Full Dashboard -->
+    <div class="action-section">
+      <button class="btn btn-primary" id="btn-open-dashboard">
+        <span class="btn-icon">📈</span> Open Full Analytics Dashboard
       </button>
     </div>
 
-    <!-- Seed Keywords Chips -->
-    <div class="section" id="chips-section" style="display:none">
-      <label class="section-label">Suggested Keywords <span class="label-hint">(click to search)</span></label>
-      <div class="chips-container" id="keyword-chips"></div>
+    <!-- Basic Configuration: Gemini API Key -->
+    <div class="settings-group">
+      <label class="settings-label" for="input-gemini-key">Gemini API Key</label>
+      <div class="input-wrapper">
+        <input type="password" id="input-gemini-key" class="settings-input" placeholder="Paste your Gemini API key" autocomplete="off">
+        <span class="key-status" id="gemini-status">Not configured</span>
+      </div>
+      <p class="settings-hint">Your API key remains local in your browser and is never sent to external servers.</p>
     </div>
 
-    <!-- Search Input -->
-    <div class="section search-section">
-      <label class="section-label" for="search-input">Search Keyword</label>
-      <div class="search-box">
-        <input type="text" id="search-input" class="search-input" placeholder="e.g. crystal prayer beads, printable planner, custom mug">
-        <select id="product-type-select" class="type-select" title="Product type filter">
-          <option value="any">All Types</option>
-          <option value="digital">Digital</option>
-          <option value="physical">Physical</option>
-          <option value="pod">POD</option>
-        </select>
-      </div>
-      <span class="search-error" id="search-error" style="display:none">Enter a keyword to search</span>
-    </div>
-
-    <!-- Action Buttons -->
-    <div class="section actions-section">
-      <button class="btn btn-primary btn-large" id="btn-research">
-        <span class="btn-icon">🚀</span> Start Research
-      </button>
-      <button class="btn btn-danger" id="btn-stop" disabled>
-        <span class="btn-icon">⏹</span> Stop
-      </button>
-    </div>
-
-    <!-- Current Status -->
-    <div class="section" id="status-section" style="display:none">
-      <div class="status-card" id="status-card">
-        <div class="status-step" id="current-step">Initializing...</div>
-        <div class="status-detail" id="current-progress"></div>
-      </div>
-    </div>
-
-    <!-- Results -->
-    <div class="section" id="results-section" style="display:none">
-      <div class="results-header">
-        <h3 class="section-title">Results</h3>
-        <div class="results-actions">
-          <button class="btn btn-small" id="btn-export-csv" title="Export CSV">📄 CSV</button>
-          <button class="btn btn-small" id="btn-export-json" title="Export JSON">📦 JSON</button>
+    <!-- Settings Accordion -->
+    <details class="settings-accordion" id="settings-accordion">
+      <summary class="accordion-summary">
+        <span class="accordion-title">⚙️ Scraper Thresholds</span>
+        <span class="accordion-chevron">▼</span>
+      </summary>
+      <div class="accordion-content">
+        <div class="field-row">
+          <div class="field-item">
+            <label class="field-label" for="input-min-searches" title="Keep keyword recommendations with at least this search volume">
+              Min Monthly Searches
+            </label>
+            <input type="number" id="input-min-searches" class="settings-input" value="500">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-item">
+            <label class="field-label" for="input-max-competition" title="Filter out highly crowded terms exceeding this threshold">
+              Max Competition
+            </label>
+            <input type="number" id="input-max-competition" class="settings-input" value="25000">
+          </div>
         </div>
       </div>
+    </details>
 
-      <!-- Stats Overview -->
-      <div class="stats-grid" id="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value" id="stat-total">0</div>
-          <div class="stat-label">Listings</div>
-        </div>
-        <div class="stat-card stat-win">
-          <div class="stat-value" id="stat-wins">0</div>
-          <div class="stat-label">Wins</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-score">0</div>
-          <div class="stat-label">Avg Score</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-beatable">0/12</div>
-          <div class="stat-label">Beatable</div>
-        </div>
-      </div>
-
-      <!-- Cluster Cards -->
-      <div class="clusters-list" id="clusters-list"></div>
-
-      <!-- Listing Cards (top 10) -->
-      <div class="listings-list" id="listings-list"></div>
-    </div>
-
-    <!-- Activity Log -->
-    <div class="section log-section">
-      <div class="log-header">
-        <h3 class="section-title-small">Activity Log</h3>
-        <div>
-          <button class="btn btn-tiny" id="btn-copy-log">Copy</button>
-          <button class="btn btn-tiny" id="btn-clear-log">Clear</button>
-        </div>
-      </div>
-      <div class="log-area" id="log-area"></div>
+    <!-- Save Controls -->
+    <div class="save-section">
+      <button class="btn btn-accent" id="btn-save-settings">Save Settings</button>
+      <span class="saved-msg" id="settings-saved" style="display:none">✓ Settings Saved!</span>
     </div>
   </div>
 
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB 2: SEO AUDIT -->
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <div class="tab-content" id="tab-audit">
-    <div class="section">
-      <label class="section-label" for="audit-url">Paste Etsy Listing URL</label>
-      <input type="url" id="audit-url" class="search-input" placeholder="https://www.etsy.com/listing/12345...">
-      <button class="btn btn-primary btn-large" id="btn-audit" style="margin-top: 10px;">
-        <span class="btn-icon">🔍</span> Audit SEO
-      </button>
-    </div>
-
-    <div class="section" id="audit-results" style="display:none">
-      <!-- Score Circle -->
-      <div class="audit-score-container">
-        <div class="score-circle" id="audit-score-circle">
-          <span class="score-value" id="audit-overall-score">0</span>
-          <span class="score-label">Overall</span>
-        </div>
-      </div>
-
-      <!-- Sub-scores -->
-      <div class="audit-subscores" id="audit-subscores">
-        <div class="subscore">
-          <div class="subscore-bar"><div class="subscore-fill" id="audit-title-bar"></div></div>
-          <span class="subscore-label">Title <span id="audit-title-score">0</span></span>
-        </div>
-        <div class="subscore">
-          <div class="subscore-bar"><div class="subscore-fill" id="audit-tags-bar"></div></div>
-          <span class="subscore-label">Tags <span id="audit-tags-score">0</span></span>
-        </div>
-        <div class="subscore">
-          <div class="subscore-bar"><div class="subscore-fill" id="audit-desc-bar"></div></div>
-          <span class="subscore-label">Description <span id="audit-desc-score">0</span></span>
-        </div>
-      </div>
-
-      <!-- Issues & Fixes -->
-      <div class="audit-details" id="audit-details"></div>
-
-      <!-- Better Title (copy) -->
-      <div class="audit-suggestion" id="audit-better-title-section" style="display:none">
-        <h4>Suggested Title</h4>
-        <div class="copy-box">
-          <span id="audit-better-title"></span>
-          <button class="btn btn-tiny" id="btn-copy-title">Copy</button>
-        </div>
-      </div>
-
-      <!-- Better Tags (copy) -->
-      <div class="audit-suggestion" id="audit-better-tags-section" style="display:none">
-        <h4>Suggested Tags (13)</h4>
-        <div class="copy-box">
-          <span id="audit-better-tags"></span>
-          <button class="btn btn-tiny" id="btn-copy-tags">Copy</button>
-        </div>
-      </div>
-
-      <button class="btn btn-small" id="btn-export-audit" style="margin-top: 10px;">📦 Export Audit</button>
-    </div>
-  </div>
-
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB 3: HISTORY -->
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <div class="tab-content" id="tab-history">
-    <div class="section">
-      <div class="history-header">
-        <h3 class="section-title">Recent Research</h3>
-        <button class="btn btn-small" id="btn-open-dashboard">📊 Dashboard</button>
-      </div>
-      <div class="history-list" id="history-list">
-        <div class="empty-state">No research runs yet. Start your first search!</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB 4: SETTINGS -->
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <div class="tab-content" id="tab-settings">
-    <div class="section">
-      <h3 class="section-title">AI Provider</h3>
-      <p class="settings-hint">Your API keys stay in YOUR browser. Never sent to any server.</p>
-
-      <label class="settings-label">Gemini API Key <span class="label-hint">(free)</span></label>
-      <input type="password" id="input-gemini-key" class="settings-input" placeholder="Paste your Gemini API key" autocomplete="off">
-      <span class="key-status" id="gemini-status">Not configured</span>
-
-      <label class="settings-label" style="margin-top: 12px">Groq API Key <span class="label-hint">(free, backup)</span></label>
-      <input type="password" id="input-groq-key" class="settings-input" placeholder="Paste your Groq API key" autocomplete="off">
-      <span class="key-status" id="groq-status">Not configured</span>
-    </div>
-
-    <div class="section">
-      <h3 class="section-title">Scoring Settings</h3>
-
-      <label class="settings-label" title="A shop with fewer reviews than this is considered beatable">Beatable Shop Reviews (max)</label>
-      <input type="number" id="input-max-reviews" class="settings-input" value="300" min="50" max="5000">
-
-      <label class="settings-label" title="How many top results to analyze">Top Listings to Analyze</label>
-      <input type="number" id="input-top-listings" class="settings-input" value="12" min="6" max="50">
-    </div>
-
-    <div class="section">
-      <h3 class="section-title">eRank Integration <span class="label-hint">(optional)</span></h3>
-      <label class="settings-label" style="cursor:pointer; display:flex; align-items:center; gap:8px;">
-        <input type="checkbox" id="chk-erank">
-        Enable eRank data enhancement
-      </label>
-      <p class="settings-hint">Log into eRank in a separate tab. Extension will read keyword data silently.</p>
-    </div>
-
-    <div class="section">
-      <h3 class="section-title">Community</h3>
-      <label class="settings-label" style="cursor:pointer; display:flex; align-items:center; gap:8px;">
-        <input type="checkbox" id="chk-community">
-        Share anonymous data for community insights
-      </label>
-      <p class="settings-hint">Only keyword, scores, and dates — no personal info ever.</p>
-    </div>
-
-    <div class="section">
-      <button class="btn btn-primary" id="btn-save-settings">Save Settings</button>
-      <span class="saved-msg" id="settings-saved" style="display:none">✓ Saved!</span>
-    </div>
-  </div>
-
-  <!-- ─── Footer ─── -->
+  <!-- Footer -->
   <div class="footer">
     <span>v1.0.0</span>
-    <span id="last-run-time"></span>
-  </div>
-  <div class="credits">
-    <span>Etsy Research Pro · Open Source · Free Forever</span>
+    <span class="footer-credits">Etsy Research Pro · Free & Open Source</span>
   </div>
 
   <script src="popup.js"></script>
