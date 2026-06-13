@@ -1597,8 +1597,19 @@ async function runInsufficientKeywordsReport(sheetsClient, config, log, seedKeyw
   }
 
   const seedId = String(seed.seed_id);
-  const keywordsData = await sheetsClient.readSheet('etsy_keywords', { seed_id: seedId }, { sinceHours: FRESH_HOURS, sinceColumn: 'updated_at' });
-  const keywords = keywordsData.rows.filter(k => String(k.seed_id) === seedId);
+  let keywords = opts.capturedKeywords;
+
+  if (!keywords || keywords.length === 0) {
+    // Use 'created_at' as the local storage keywords schema does not have updated_at.
+    let keywordsData = await sheetsClient.readSheet('etsy_keywords', { seed_id: seedId }, { sinceHours: FRESH_HOURS, sinceColumn: 'created_at' });
+    keywords = keywordsData.rows.filter(k => String(k.seed_id) === seedId);
+
+    // Robust fallback: if no keywords qualify in the freshness window, load all keywords for this seed to ensure the table displays them
+    if (keywords.length === 0) {
+      keywordsData = await sheetsClient.readSheet('etsy_keywords', { seed_id: seedId });
+      keywords = keywordsData.rows.filter(k => String(k.seed_id) === seedId);
+    }
+  }
 
   const now = new Date().toISOString();
 

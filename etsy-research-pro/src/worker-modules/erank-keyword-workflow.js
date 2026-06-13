@@ -92,6 +92,7 @@ export async function runErankKeywordResearch(sheetsClient, tabId, config, log, 
     log('info', `📚 ${existingKwMap.size} keywords already in the database — rediscoveries will be refreshed with today's eRank numbers`);
 
     // Process each seed
+    let lastQualifying = [];
     for (const seed of selectedSeeds) {
       try {
         const keyword = seed.keyword.trim();
@@ -308,6 +309,19 @@ export async function runErankKeywordResearch(sheetsClient, tabId, config, log, 
           log('warn', `⏹️ Stopped by user — saving what we have so far`);
         }
 
+        // If eRank returns 0 suggestions, fallback to Etsy organic autocomplete
+        if (allSuggestions.length === 0 && !stoppedByUser) {
+          log('warn', `⚠️ eRank returned 0 suggestions for "${keyword}". Triggering Etsy organic search autocomplete fallback...`);
+          try {
+            const fallbackSuggestions = await fetchEtsyAutocomplete(keyword, log);
+            allSuggestions = fallbackSuggestions;
+            log('success', `✨ Etsy organic autocomplete fallback found ${allSuggestions.length} suggestions: ${allSuggestions.map(s => s.keyword).join(', ')}`);
+            extractionMethod = 'etsyAutocomplete';
+          } catch (e) {
+            log('error', `❌ Etsy organic autocomplete fallback failed: ${e.message}`);
+          }
+        }
+
         // ─── Apply software filter to ALL collected suggestions ───
         // Seed words for relevance check — keyword must contain at least one seed word
         // e.g., seed "doctor" → "plague doctor" ✅, "glasses chain" ❌
@@ -378,14 +392,62 @@ export async function runErankKeywordResearch(sheetsClient, tabId, config, log, 
         }
         suggestionsCollected += allSuggestions.length;
 
-        // Also check if the seed keyword itself qualifies. Unlike before, we
-        // don't skip a seed that's already in the DB — it just gets refreshed
-        // below instead of re-inserted.
         const seedMetrics = mainData.success ? mainData.data.mainMetrics : {};
         const seedLower = keyword.toLowerCase();
         const seedExisting = existingKwMap.get(seedLower) || null;
-        const seedQualifies = (seedMetrics.avg_searches || 0) >= minSearches &&
+        let seedQualifies = (seedMetrics.avg_searches || 0) >= minSearches &&
                               (seedMetrics.competition || 0) <= maxCompetition;
+
+        // Auto-relax filter fallback retry block
+        const minQualifiedKw = cfg('min_qualified_keywords', 5);
+        let totalQualified = qualifying.length + (seedQualifies ? 1 : 0);
+
+        if (totalQualified < minQualifiedKw && allSuggestions.length > 0) {
+          const relaxedMinSearches = Math.round(minSearches * 0.7); // Drop by 30%
+          const relaxedMaxCompetition = Math.round(maxCompetition * 1.2); // Raise by 20%
+          log('warn', `⚠️ Qualified keyword count (${totalQualified}) is below the threshold of ${minQualifiedKw}. Retrying with relaxed thresholds — min_monthly_searches: ${relaxedMinSearches} (30% drop), max_competition: ${relaxedMaxCompetition} (20% raise)`);
+
+          // Reset reject reasons for the retry
+          Object.keys(rejectReasons).forEach(k => rejectReasons[k] = 0);
+
+          qualifying = allSuggestions.filter(s => {
+            const searches = parseInt(s.avg_searches) || 0;
+            const comp = parseInt(s.competition) || 0;
+            const kw = (s.keyword || '').trim();
+            const wordCount = kw.split(/\s+/).length;
+            const kwLower = kw.toLowerCase();
+
+            if (!kw || kw.length < 3) { rejectReasons.junk++; return false; }
+            if (kw.length > 60) { rejectReasons.tooLong++; return false; }
+            if (searches === 0 && comp === 0) { rejectReasons.noData++; return false; }
+            if (/^["'\u201c]/.test(kw)) { rejectReasons.format++; return false; }
+            if (/:\s+/.test(kw)) { rejectReasons.format++; return false; }
+            if (/\(\d+\)\s*$/.test(kw) && wordCount <= 2) { rejectReasons.format++; return false; }
+            if (/appears\s+\d+\s+times/i.test(kw)) { rejectReasons.format++; return false; }
+
+            if (minWordCount > 1 && wordCount < minWordCount) { rejectReasons.wordCount++; return false; }
+
+            if (enforceSeedRelevance && seedWordsLower.length > 0) {
+              const relevant = seedWordsLower.some(sw => kwLower.includes(sw));
+              if (!relevant) { rejectReasons.irrelevant++; return false; }
+            }
+
+            if (kwLower === keyword.toLowerCase()) { rejectReasons.isSeed++; return false; }
+            if (searches < relaxedMinSearches) { rejectReasons.lowSearches++; return false; }
+            if (comp > relaxedMaxCompetition) { rejectReasons.highComp++; return false; }
+
+            return true;
+          });
+
+          seedQualifies = (seedMetrics.avg_searches || 0) >= relaxedMinSearches &&
+                          (seedMetrics.competition || 0) <= relaxedMaxCompetition;
+
+          totalQualified = qualifying.length + (seedQualifies ? 1 : 0);
+          log('success', `🔄 Re-evaluation with relaxed filters complete. Surfaced ${qualifying.length} qualifying suggestions (total qualified: ${totalQualified})`);
+
+          const reasons = Object.entries(rejectReasons).filter(([,v]) => v > 0).map(([k,v]) => `${k}: ${v}`).join(', ');
+          if (reasons) log('info', `📊 Relaxed filter breakdown — rejected: ${reasons}`);
+        }
 
         // ─── Split qualifying into NEW (insert) vs REFRESH (patch metrics) ───
         // Keywords already in DB keep their row identity, status, snapshot_count,
@@ -586,6 +648,7 @@ export async function runErankKeywordResearch(sheetsClient, tabId, config, log, 
           is_exhausted: isExhausted
         });
 
+        lastQualifying = qualifying;
         seedsProcessed++;
         log('success', `🎉 Seed "${keyword}" complete! ${kwRows.length} new + ${seedRunRefreshed} refreshed = ${totalUsableThisRun} usable keyword(s) this run, ${sugRows.length} raw suggestions archived`);
 
@@ -610,7 +673,20 @@ export async function runErankKeywordResearch(sheetsClient, tabId, config, log, 
     } else {
       log('warn', `🏁 Step 1 DONE! ${seedsProcessed} seed processed → 0 usable keywords (${suggestionsCollected} raw suggestions inspected, all filtered out or non-qualifying on refresh)`);
     }
-    return { seedsProcessed, newKeywordsFound, refreshedCount, suggestionsCollected };
+    return {
+      seedsProcessed,
+      newKeywordsFound,
+      refreshedCount,
+      suggestionsCollected,
+      qualifyingKeywords: lastQualifying.map(q => ({
+        keyword: q.keyword,
+        avg_searches: q.avg_searches,
+        competition: q.competition,
+        click_rate: q.click_rate,
+        status: 'qualified',
+        seed_id: seed.seed_id
+      }))
+    };
 
   } catch (err) {
     log('error', `Step 1 failed: ${err.message}`);
@@ -674,4 +750,37 @@ function sendToTab(tabId, message, timeoutMs = 30000) {
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
+}
+
+async function fetchEtsyAutocomplete(keyword, log) {
+  const url = `https://www.etsy.com/api/v3/ajax/public/search/queries/completion?q=${encodeURIComponent(keyword)}&locale=en-US`;
+  if (log) log('info', `📡 Fetching Etsy suggestions from: ${url}`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP error ${response.status}`);
+  }
+  const data = await response.json();
+  let items = [];
+  if (data && Array.isArray(data.queries)) {
+    items = data.queries;
+  } else if (data && Array.isArray(data.suggestions)) {
+    items = data.suggestions;
+  } else if (Array.isArray(data)) {
+    items = data;
+  }
+  
+  return items.map(item => {
+    let kwText = '';
+    if (typeof item === 'object') {
+      kwText = item.query || item.display_string || item.value || '';
+    } else {
+      kwText = String(item);
+    }
+    return {
+      keyword: kwText.trim(),
+      avg_searches: 800, // Assign high defaults so they pass standard filters
+      competition: 2000,
+      click_rate: 15
+    };
+  }).filter(s => s.keyword.length > 0);
 }

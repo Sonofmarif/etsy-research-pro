@@ -231,7 +231,10 @@ class LocalStorageClient {
       const sinceCol = LocalStorageClient._mapColumnForTable(options.sinceColumn, table);
       const cutoff = Date.now() - (options.sinceHours * 60 * 60 * 1000);
       rows = rows.filter(row => {
-        const dateStr = row[sinceCol];
+        let dateStr = row[sinceCol];
+        if (!dateStr && (sinceCol === 'updated_at' || sinceCol === 'audited_at')) {
+          dateStr = row['created_at'] || row['snapshot_date'];
+        }
         if (!dateStr) return false;
         const time = new Date(dateStr).getTime();
         return isFinite(time) && time >= cutoff;
@@ -914,7 +917,14 @@ async function runFullPipeline(seedKeyword, options = {}) {
       const step4 = await runNicheScoring(apiClient, config, (type, msg) => {
         log(type, `[Step 4] ${msg}`);
         updateState({ progress: msg });
-      }, seedKeyword, { insufficientKeywords: true, availableCount: availableForSeed, minRequired: minQualifiedKw, pipelineRunId, pipelineStartedAt });
+      }, seedKeyword, {
+        insufficientKeywords: true,
+        availableCount: availableForSeed,
+        minRequired: minQualifiedKw,
+        pipelineRunId,
+        pipelineStartedAt,
+        capturedKeywords: step1.qualifyingKeywords || []
+      });
       await setStepStatus('final_report', 'success');
 
       await saveFinalResults(seedKeyword, step4, config);
