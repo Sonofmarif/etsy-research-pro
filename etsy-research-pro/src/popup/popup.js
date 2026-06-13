@@ -25,6 +25,7 @@
       inputDelayBetweenPages: $('input-delay-between-pages'),
       inputMaxShopReviews: $('input-max-shop-reviews'),
       inputMinBeatableSlots: $('input-min-beatable-slots'),
+      inputMinQualifiedKeywords: $('input-min-qualified-keywords'),
       inputWebhookUrl: $('input-webhook-url'),
       btnSaveSettings: $('btn-save-settings'),
       settingsSaved: $('settings-saved'),
@@ -96,9 +97,10 @@
 
         dom.inputMinSearches.value = config.min_monthly_searches !== undefined ? config.min_monthly_searches : 500;
         dom.inputMaxCompetition.value = config.max_competition !== undefined ? config.max_competition : 25000;
-        dom.inputDelayBetweenPages.value = config.delay_between_pages !== undefined ? config.delay_between_pages : 5;
+        dom.inputDelayBetweenPages.value = config.delay_between_pages !== undefined ? config.delay_between_pages : 3;
         dom.inputMaxShopReviews.value = config.max_shop_reviews_beatable !== undefined ? config.max_shop_reviews_beatable : 300;
         dom.inputMinBeatableSlots.value = config.min_beatable_slots !== undefined ? config.min_beatable_slots : 3;
+        dom.inputMinQualifiedKeywords.value = config.min_qualified_keywords !== undefined ? config.min_qualified_keywords : 5;
         dom.inputWebhookUrl.value = config.webhook_url || '';
 
         resolve();
@@ -118,14 +120,16 @@
         const delayPages = parseInt(dom.inputDelayBetweenPages.value);
         const maxReviews = parseInt(dom.inputMaxShopReviews.value);
         const minSlots = parseInt(dom.inputMinBeatableSlots.value);
+        const minQualified = parseInt(dom.inputMinQualifiedKeywords.value);
         const webhookUrl = dom.inputWebhookUrl.value.trim();
 
         config.gemini_api_key = geminiKey;
         config.min_monthly_searches = isNaN(minSearches) ? 500 : minSearches;
         config.max_competition = isNaN(maxComp) ? 25000 : maxComp;
-        config.delay_between_pages = isNaN(delayPages) ? 5 : delayPages;
+        config.delay_between_pages = isNaN(delayPages) ? 3 : delayPages;
         config.max_shop_reviews_beatable = isNaN(maxReviews) ? 300 : maxReviews;
         config.min_beatable_slots = isNaN(minSlots) ? 3 : minSlots;
+        config.min_qualified_keywords = isNaN(minQualified) ? 5 : minQualified;
         config.webhook_url = webhookUrl;
 
         if (geminiKey) {
@@ -163,9 +167,10 @@
       gemini_api_key: dom.inputGeminiKey.value.trim(),
       min_monthly_searches: parseInt(dom.inputMinSearches.value) || 500,
       max_competition: parseInt(dom.inputMaxCompetition.value) || 25000,
-      delay_between_pages: parseInt(dom.inputDelayBetweenPages.value) || 5,
+      delay_between_pages: parseInt(dom.inputDelayBetweenPages.value) || 3,
       max_shop_reviews_beatable: parseInt(dom.inputMaxShopReviews.value) || 300,
       min_beatable_slots: parseInt(dom.inputMinBeatableSlots.value) || 3,
+      min_qualified_keywords: parseInt(dom.inputMinQualifiedKeywords.value) || 5,
       webhook_url: dom.inputWebhookUrl.value.trim()
     };
 

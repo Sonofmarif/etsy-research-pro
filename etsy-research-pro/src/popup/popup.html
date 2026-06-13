@@ -118,7 +118,7 @@
             <label class="field-label" for="input-delay-between-pages" title="Wait time (seconds) between opening listing and search pages">
               Delay Between Pages (sec)
             </label>
-            <input type="number" id="input-delay-between-pages" class="settings-input" value="5">
+            <input type="number" id="input-delay-between-pages" class="settings-input" value="3" placeholder="3">
           </div>
           <div class="field-item">
             <label class="field-label" for="input-max-shop-reviews" title="Shops with fewer reviews than this are considered beatable slots">
@@ -128,12 +128,18 @@
           </div>
         </div>
 
-        <div class="field-row">
+        <div class="field-row-2col">
           <div class="field-item">
             <label class="field-label" for="input-min-beatable-slots" title="Minimum number of beatable slots required for a GO verdict">
               Min Beatable Slots Required
             </label>
             <input type="number" id="input-min-beatable-slots" class="settings-input" value="3">
+          </div>
+          <div class="field-item">
+            <label class="field-label" for="input-min-qualified-keywords" title="Minimum qualifying keywords required before declaring a GO verdict">
+              Min Qualified Keywords
+            </label>
+            <input type="number" id="input-min-qualified-keywords" class="settings-input" value="5" placeholder="5">
           </div>
         </div>
 

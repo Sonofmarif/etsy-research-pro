@@ -24,7 +24,8 @@ const DEFAULT_CONFIG = {
   erank_enabled: false,
   min_monthly_searches: 500,
   max_competition: 25000,
-  delay_between_pages: 5,
+  delay_between_pages: 3,
+  min_qualified_keywords: 5,
 
   // History
   max_history_runs: 500,
