@@ -45,6 +45,16 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
   const pipelineStartMs   = pipelineStartedAt ? Date.parse(pipelineStartedAt) : null;
 
   try {
+    // Force storage sync by doing an async read of config from chrome.storage.local
+    try {
+      const storageRes = await chrome.storage.local.get('config');
+      if (storageRes && storageRes.config) {
+        config = { ...storageRes.config, ...(config || {}) };
+      }
+    } catch (e) {
+      log('warn', `Failed to sync storage config in runNicheScoring: ${e.message}`);
+    }
+
     // Load qualification result from Step 2
     const { nicheQualification } = await chrome.storage.local.get('nicheQualification');
 
@@ -1569,6 +1579,16 @@ ${demandBannerHtml}
 // listings, no audits, no concepts. The user guidance at the top explains
 // exactly what to do next (lower the min, pick a new seed, or re-run).
 async function runInsufficientKeywordsReport(sheetsClient, config, log, seedKeyword, opts) {
+  // Force storage sync by doing an async read of config from chrome.storage.local
+  try {
+    const storageRes = await chrome.storage.local.get('config');
+    if (storageRes && storageRes.config) {
+      config = { ...storageRes.config, ...(config || {}) };
+    }
+  } catch (e) {
+    log('warn', `Failed to sync storage config in runInsufficientKeywordsReport: ${e.message}`);
+  }
+
   log('info', `📭 Generating NO-GO report for "${seedKeyword}" — Step 1 yielded ${opts.availableCount} of ${opts.minRequired} required keywords`);
 
   let dbConfig = {};

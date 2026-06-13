@@ -607,6 +607,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           
           const seedKeyword = msg.seedKeyword || msg.keyword || '';
           
+          // Force storage sync by doing an async read from chrome.storage.local
+          const storageRes = await chrome.storage.local.get('config');
+          const freshConfig = storageRes.config || {};
+          const mergedOptions = { ...freshConfig, ...(msg.options || {}) };
+          const minQualifiedKw = parseInt(mergedOptions.min_qualified_keywords) || 5;
+          console.log(`Pipeline started with threshold: ${minQualifiedKw}`);
+          
           await updateState({
             running: true,
             currentStep: 'Starting research...',
@@ -619,8 +626,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ started: true });
           
           const runner = (msg.action === 'startResearch' || msg.mode === 'full')
-            ? runFullPipeline(seedKeyword, msg.options)
-            : runSingleStep(msg.step, seedKeyword, msg.options);
+            ? runFullPipeline(seedKeyword, mergedOptions)
+            : runSingleStep(msg.step, seedKeyword, mergedOptions);
             
           runner.finally(() => { pipelineRunning = false; });
         } catch (e) {
@@ -862,6 +869,10 @@ async function runFullPipeline(seedKeyword, options = {}) {
     });
 
     const config = { ...(await loadConfig()), ...options };
+    const minQualifiedKwVal = parseInt(config.min_qualified_keywords) || 5;
+    console.log(`Pipeline started with threshold: ${minQualifiedKwVal}`);
+    await log('info', `Pipeline started with threshold: ${minQualifiedKwVal}`);
+
     const tabId = await getOrCreateWorkTab();
 
     // Create run record
@@ -1049,6 +1060,9 @@ async function runSingleStep(stepNum, seedKeyword, options = {}) {
   try {
     await log('info', `=== Running Step ${stepNum}: ${stepNames[stepNum]} for "${seedKeyword}" ===`);
     const config = { ...(await loadConfig()), ...options };
+    const minQualifiedKwVal = parseInt(config.min_qualified_keywords) || 5;
+    console.log(`Pipeline started with threshold: ${minQualifiedKwVal}`);
+    await log('info', `Pipeline started with threshold: ${minQualifiedKwVal}`);
     const logFn = (type, msg) => {
       log(type, `[Step ${stepNum}] ${msg}`);
       updateState({ progress: msg });
