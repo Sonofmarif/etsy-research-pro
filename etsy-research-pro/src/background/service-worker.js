@@ -608,11 +608,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const seedKeyword = msg.seedKeyword || msg.keyword || '';
           
           // Force storage sync by doing an async read from chrome.storage.local
-          const storageRes = await chrome.storage.local.get('config');
+          const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
           const freshConfig = storageRes.config || {};
           const mergedOptions = { ...freshConfig, ...(msg.options || {}) };
-          const minQualifiedKw = parseInt(mergedOptions.min_qualified_keywords) || 5;
-          console.log(`Pipeline started with threshold: ${minQualifiedKw}`);
+          const minQualifiedKw = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(mergedOptions.min_qualified_keywords) || parseInt(mergedOptions.minQualifiedKeywords) || 5;
+          console.log(`DEBUG: Pipeline checking threshold: ${minQualifiedKw}`);
           
           await updateState({
             running: true,
@@ -868,10 +868,18 @@ async function runFullPipeline(seedKeyword, options = {}) {
       }
     });
 
-    const config = { ...(await loadConfig()), ...options };
-    const minQualifiedKwVal = parseInt(config.min_qualified_keywords) || 5;
-    console.log(`Pipeline started with threshold: ${minQualifiedKwVal}`);
-    await log('info', `Pipeline started with threshold: ${minQualifiedKwVal}`);
+    // Fetch directly from chrome.storage.local to resolve configuration sync issues
+    const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
+    const freshConfig = storageRes.config || {};
+    const config = { ...freshConfig, ...options };
+    const minQualifiedKwVal = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(config.min_qualified_keywords) || parseInt(config.minQualifiedKeywords) || 5;
+    config.min_qualified_keywords = minQualifiedKwVal;
+
+    const delayBetweenPagesVal = parseInt(storageRes.delayBetweenPages) || parseInt(storageRes.delay_between_pages) || parseInt(config.delay_between_pages) || parseInt(config.delayBetweenPages) || 3;
+    config.delay_between_pages = delayBetweenPagesVal;
+
+    console.log(`DEBUG: Pipeline checking threshold: ${minQualifiedKwVal}`);
+    await log('info', `DEBUG: Pipeline checking threshold: ${minQualifiedKwVal}`);
 
     const tabId = await getOrCreateWorkTab();
 
@@ -1059,10 +1067,18 @@ async function runSingleStep(stepNum, seedKeyword, options = {}) {
 
   try {
     await log('info', `=== Running Step ${stepNum}: ${stepNames[stepNum]} for "${seedKeyword}" ===`);
-    const config = { ...(await loadConfig()), ...options };
-    const minQualifiedKwVal = parseInt(config.min_qualified_keywords) || 5;
-    console.log(`Pipeline started with threshold: ${minQualifiedKwVal}`);
-    await log('info', `Pipeline started with threshold: ${minQualifiedKwVal}`);
+    // Fetch directly from chrome.storage.local to resolve configuration sync issues
+    const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
+    const freshConfig = storageRes.config || {};
+    const config = { ...freshConfig, ...options };
+    const minQualifiedKwVal = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(config.min_qualified_keywords) || parseInt(config.minQualifiedKeywords) || 5;
+    config.min_qualified_keywords = minQualifiedKwVal;
+
+    const delayBetweenPagesVal = parseInt(storageRes.delayBetweenPages) || parseInt(storageRes.delay_between_pages) || parseInt(config.delay_between_pages) || parseInt(config.delayBetweenPages) || 3;
+    config.delay_between_pages = delayBetweenPagesVal;
+
+    console.log(`DEBUG: Pipeline checking threshold: ${minQualifiedKwVal}`);
+    await log('info', `DEBUG: Pipeline checking threshold: ${minQualifiedKwVal}`);
     const logFn = (type, msg) => {
       log(type, `[Step ${stepNum}] ${msg}`);
       updateState({ progress: msg });
