@@ -621,10 +621,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const seedKeyword = msg.seedKeyword || msg.keyword || '';
           
           // Force storage sync by doing an async read from chrome.storage.local
-          const settings = await getLiveSettings();
-          const mergedOptions = { ...settings, ...(msg.options || {}) };
-          const minQualifiedKw = mergedOptions.min_qualified_keywords;
-          console.log(`Scraper starting with threshold: ${minQualifiedKw}`);
+          const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
+          const freshConfig = storageRes.config || {};
+          const minQualifiedKw = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(freshConfig.min_qualified_keywords) || parseInt(freshConfig.minQualifiedKeywords) || 5;
+          const delayBetweenPages = parseInt(storageRes.delayBetweenPages) || parseInt(storageRes.delay_between_pages) || parseInt(freshConfig.delay_between_pages) || parseInt(freshConfig.delayBetweenPages) || 3;
+          
+          const fetchedSettings = {
+            ...freshConfig,
+            minQualifiedKeywords: minQualifiedKw,
+            min_qualified_keywords: minQualifiedKw,
+            delayBetweenPages: delayBetweenPages,
+            delay_between_pages: delayBetweenPages
+          };
+          
+          const mergedOptions = { ...fetchedSettings, ...(msg.options || {}) };
+          console.log("DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
           
           await updateState({
             running: true,
@@ -881,12 +892,24 @@ async function runFullPipeline(seedKeyword, options = {}) {
     });
 
     // Fetch directly from chrome.storage.local to resolve configuration sync issues
-    const settings = await getLiveSettings();
-    const config = { ...settings, ...options };
+    const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
+    const freshConfig = storageRes.config || {};
+    const minQualifiedKw = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(freshConfig.min_qualified_keywords) || parseInt(freshConfig.minQualifiedKeywords) || 5;
+    const delayBetweenPages = parseInt(storageRes.delayBetweenPages) || parseInt(storageRes.delay_between_pages) || parseInt(freshConfig.delay_between_pages) || parseInt(freshConfig.delayBetweenPages) || 3;
+    
+    const fetchedSettings = {
+      ...freshConfig,
+      minQualifiedKeywords: minQualifiedKw,
+      min_qualified_keywords: minQualifiedKw,
+      delayBetweenPages: delayBetweenPages,
+      delay_between_pages: delayBetweenPages
+    };
+
+    const config = { ...fetchedSettings, ...options };
     const minQualifiedKwVal = config.min_qualified_keywords;
 
-    console.log(`Scraper starting with threshold: ${minQualifiedKwVal}`);
-    await log('info', `Scraper starting with threshold: ${minQualifiedKwVal}`);
+    console.log("DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
+    await log('info', "DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
 
     const tabId = await getOrCreateWorkTab();
 
@@ -1075,12 +1098,24 @@ async function runSingleStep(stepNum, seedKeyword, options = {}) {
   try {
     await log('info', `=== Running Step ${stepNum}: ${stepNames[stepNum]} for "${seedKeyword}" ===`);
     // Fetch directly from chrome.storage.local to resolve configuration sync issues
-    const settings = await getLiveSettings();
-    const config = { ...settings, ...options };
+    const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
+    const freshConfig = storageRes.config || {};
+    const minQualifiedKw = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(freshConfig.min_qualified_keywords) || parseInt(freshConfig.minQualifiedKeywords) || 5;
+    const delayBetweenPages = parseInt(storageRes.delayBetweenPages) || parseInt(storageRes.delay_between_pages) || parseInt(freshConfig.delay_between_pages) || parseInt(freshConfig.delayBetweenPages) || 3;
+    
+    const fetchedSettings = {
+      ...freshConfig,
+      minQualifiedKeywords: minQualifiedKw,
+      min_qualified_keywords: minQualifiedKw,
+      delayBetweenPages: delayBetweenPages,
+      delay_between_pages: delayBetweenPages
+    };
+
+    const config = { ...fetchedSettings, ...options };
     const minQualifiedKwVal = config.min_qualified_keywords;
 
-    console.log(`Scraper starting with threshold: ${minQualifiedKwVal}`);
-    await log('info', `Scraper starting with threshold: ${minQualifiedKwVal}`);
+    console.log("DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
+    await log('info', "DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
     const logFn = (type, msg) => {
       log(type, `[Step ${stepNum}] ${msg}`);
       updateState({ progress: msg });
