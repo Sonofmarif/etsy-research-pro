@@ -219,7 +219,26 @@ class LocalStorageClient {
     const table = LocalStorageClient._resolveTable(sheetName);
     let rows = await this._getTable(table);
 
-    for (const [k, v] of Object.entries(filters)) {
+    let filtersCopy = { ...filters };
+    if (filtersCopy.hasOwnProperty('seed_id')) {
+      const targetSeedId = String(filtersCopy.seed_id);
+      delete filtersCopy.seed_id;
+      
+      if (table === 'listings' || table === 'listing_audit') {
+        const keywordsTable = await this._getTable('keywords');
+        const seedKeywords = keywordsTable.filter(k => String(k.seed_id) === targetSeedId);
+        
+        if (table === 'listings') {
+          const allowedKwIds = new Set(seedKeywords.map(k => String(k.keyword_id)));
+          rows = rows.filter(row => allowedKwIds.has(String(row.keyword_id)));
+        } else if (table === 'listing_audit') {
+          const allowedKwTexts = new Set(seedKeywords.map(k => String(k.keyword || '').toLowerCase().trim()));
+          rows = rows.filter(row => allowedKwTexts.has(String(row.keyword_text || '').toLowerCase().trim()));
+        }
+      }
+    }
+
+    for (const [k, v] of Object.entries(filtersCopy)) {
       const mappedK = LocalStorageClient._mapColumnForTable(k, table);
       rows = rows.filter(row => {
         const val = row[mappedK];

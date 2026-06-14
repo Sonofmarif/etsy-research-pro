@@ -194,7 +194,11 @@ export async function runErankListingAudit(sheetsClient, tabId, config, log, see
       if (shouldStop()) { log('warn', `🛑 Stop requested — halting listing audit`); break; }
       const listing = auditBatch[i];
       try {
-        log('info', `🛍️ [${i + 1}/${auditBatch.length}] Auditing listing #${listing.listing_id}: "${(listing.title || '').substring(0, 45)}..."`);
+        // Find parent keyword info
+        const parentKw = keywords.find(k => String(k.keyword_id) === String(listing.keyword_id));
+        const kwText = parentKw ? parentKw.keyword : '';
+
+        log('info', `🛍️ [${i + 1}/${auditBatch.length}] Auditing listing #${listing.listing_id} under keyword "${kwText}": "${(listing.title || '').substring(0, 45)}..."`);
 
         const etsyUrl = `https://www.etsy.com/listing/${listing.listing_id}`;
         await navigateTab(tabId, etsyUrl);
@@ -202,7 +206,11 @@ export async function runErankListingAudit(sheetsClient, tabId, config, log, see
 
         let socialData = {};
         try {
-          const result = await sendToTab(tabId, { action: 'extractEtsyListingDetail' });
+          const result = await sendToTab(tabId, { 
+            action: 'extractEtsyListingDetail',
+            keyword: kwText,
+            url: etsyUrl
+          });
           if (result.success) {
             socialData = result.data;
             const signals = [];
@@ -239,10 +247,6 @@ export async function runErankListingAudit(sheetsClient, tabId, config, log, see
         } catch (e) {
           log('warn', `   ⚠️ Etsy page hiccup for listing #${listing.listing_id}: ${e.message}`);
         }
-
-        // Find parent keyword info
-        const parentKw = keywords.find(k => String(k.keyword_id) === String(listing.keyword_id));
-        const kwText = parentKw ? parentKw.keyword : '';
 
         // Write to listing_audit — Etsy fields only, eRank fields left empty
         const now = new Date().toISOString();

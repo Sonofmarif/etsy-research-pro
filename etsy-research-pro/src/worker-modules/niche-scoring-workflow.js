@@ -11,6 +11,28 @@
 
 import { isJunkKeyword } from './etsy-snapshot-workflow.js';
 
+async function triggerWebhookExport(payload, log) {
+  try {
+    const storageRes = await chrome.storage.local.get(['config', 'webhook_url']);
+    const webhookUrl = (storageRes.config && storageRes.config.webhook_url) || storageRes.webhook_url;
+    if (webhookUrl) {
+      log('info', `📡 Triggering webhook export to: ${webhookUrl}`);
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (response.ok) {
+        log('success', '✓ Webhook export complete.');
+      } else {
+        log('warn', `Webhook returned status: ${response.status}`);
+      }
+    }
+  } catch (e) {
+    log('error', `Failed to send webhook: ${e.message}`);
+  }
+}
+
 export async function runNicheScoring(sheetsClient, config, log, seedKeyword, opts = {}) {
   const started = new Date().toISOString();
 
@@ -436,6 +458,36 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
       `Seed: "${seedKeyword}", Verdict: ${verdict}, Qualified: ${qualifiedCount}/${totalProcessed}`);
 
     log('success', `🏁 Step 4 DONE! "${seedKeyword}" → ${verdict}`);
+
+    // Trigger webhook export if URL is populated
+    try {
+      const productTypeFilter = config.product_type_filter || 'any';
+      const niche = {
+        seed_keyword: seedKeyword, category: seed.category, product_type: productType,
+        total_keywords: totalKw, qualified_keywords: qualifiedCount, total_processed: totalProcessed,
+        total_listings: totalListings, total_shops: totalShops,
+        avg_price: avgPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
+        avg_searches: avgSearches.toFixed(0), weak_competitor_pct: weakPct.toFixed(1),
+        has_audits: hasAudits,
+        verdict, min_qualified_kw: minQualifiedKw,
+        max_shop_reviews_beatable: maxShopReviewsBeatable, min_beatable_slots: minBeatableSlots,
+        max_listings_per_kw: maxListingsPerKw,
+        min_winner_score: minWinnerScore,
+        product_type_filter: productTypeFilter,
+      };
+      await triggerWebhookExport({
+        keyword: seedKeyword,
+        verdict: verdict,
+        niche: niche,
+        keywords: scoredKeywords,
+        listings: dedupedListings,
+        audits: audits,
+        completed_at: new Date().toISOString()
+      }, log);
+    } catch (whErr) {
+      log('warn', `Webhook trigger failed: ${whErr.message}`);
+    }
+
     return { verdict, qualifiedCount, totalProcessed, reportsGenerated };
 
   } catch (err) {
@@ -1681,6 +1733,22 @@ async function runInsufficientKeywordsReport(sheetsClient, config, log, seedKeyw
     `Seed: "${seedKeyword}", Verdict: NO-GO (insufficient keywords ${opts.availableCount}/${opts.minRequired})`);
 
   log('warn', `🏁 Step 4 DONE! "${seedKeyword}" → NO-GO (insufficient keywords)`);
+
+  // Trigger webhook export if URL is populated
+  try {
+    await triggerWebhookExport({
+      keyword: seedKeyword,
+      verdict: 'NO-GO',
+      reason: 'insufficient_keywords',
+      available_count: opts.availableCount,
+      min_required: opts.minRequired,
+      keywords: keywords,
+      completed_at: new Date().toISOString()
+    }, log);
+  } catch (whErr) {
+    log('warn', `Webhook trigger failed: ${whErr.message}`);
+  }
+
   return { verdict: 'NO-GO', qualifiedCount: 0, totalProcessed: keywords.length, reportsGenerated };
 }
 

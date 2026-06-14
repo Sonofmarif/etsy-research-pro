@@ -6,6 +6,7 @@
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'extractEtsyListingDetail') {
+      console.log("Scraper: Attempting to audit " + (msg.keyword || "unknown"));
       handleExtractDetail(sendResponse);
       return true;
     }
