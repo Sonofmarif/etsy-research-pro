@@ -20,6 +20,7 @@
   let lastAudit = null;
   let pollTimer = null;
   let logEntries = [];
+  let currentSeedId = null;
 
   // Color palette
   const COLORS = {
@@ -56,6 +57,7 @@
     initAuditHandlers();
     initLogHandlers();
     initExportHandlers();
+    initFeedbackModal();
 
     // Table search
     $('table-search-input').addEventListener('input', (e) => {
@@ -423,6 +425,7 @@
   // ─── Results Rendering ──────────────────────────────────────────────────
   function renderResults(results) {
     if (!results) return;
+    currentSeedId = results.seed_id || results.keyword || null;
 
     $('snapshot-skeleton').style.display = 'none';
     $('snapshot-empty').style.display = 'none';
@@ -1479,6 +1482,85 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ─── Feedback Modal ──────────────────────────────────────────────────────
+  function initFeedbackModal() {
+    const btnReport = $('btn-report-error');
+    const modal = $('feedback-modal');
+    const closeBtn = $('close-feedback-modal');
+    const seedInput = $('feedback-seed-id');
+    const textInput = $('feedback-text');
+    const btnSubmit = $('btn-submit-feedback');
+    const statusMsg = $('feedback-status-msg');
+
+    if (!btnReport || !modal || !closeBtn) return;
+
+    btnReport.addEventListener('click', () => {
+      seedInput.value = currentSeedId || 'None';
+      textInput.value = '';
+      statusMsg.style.display = 'none';
+      btnSubmit.disabled = false;
+      modal.style.display = 'flex';
+    });
+
+    closeBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
+    });
+
+    btnSubmit.addEventListener('click', async () => {
+      const feedback = textInput.value.trim();
+      if (!feedback) {
+        statusMsg.textContent = 'Feedback message cannot be empty.';
+        statusMsg.style.color = 'var(--skip)';
+        statusMsg.style.display = 'block';
+        return;
+      }
+
+      btnSubmit.disabled = true;
+      statusMsg.textContent = 'Submitting...';
+      statusMsg.style.color = 'var(--text-secondary)';
+      statusMsg.style.display = 'block';
+
+      try {
+        const storageRes = await chrome.storage.local.get('config');
+        const config = storageRes.config || {};
+        const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
+        const submitUrl = `${baseUrl}/api/feedback/submit`;
+
+        const response = await fetch(submitUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            seed_id: seedInput.value,
+            feedback: feedback,
+            url: window.location.href,
+            user_agent: navigator.userAgent
+          })
+        });
+
+        if (response.ok) {
+          statusMsg.textContent = '✓ Feedback submitted successfully!';
+          statusMsg.style.color = 'var(--win)';
+          setTimeout(() => {
+            modal.style.display = 'none';
+          }, 2000);
+        } else {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || 'Server error');
+        }
+      } catch (err) {
+        statusMsg.textContent = `Error: ${err.message}`;
+        statusMsg.style.color = 'var(--skip)';
+        btnSubmit.disabled = false;
+      }
+    });
   }
 
   // ─── Window resize redraw charts ────────────────────────────────────────

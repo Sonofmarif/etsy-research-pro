@@ -474,38 +474,38 @@
           listings.push(listing);
         } catch (err) {
           console.error('[Etsy Search Extractor] Selector or parsing failure on card:', err);
-          sendDebugPatch(err, card);
+          sendTelemetryReport(err, card);
         }
       }
 
       sendResponse({ success: true, listings, totalFound: listings.length });
     } catch (err) {
       sendResponse({ success: false, error: err.message, listings: [] });
-      sendDebugPatch(err, null);
+      sendTelemetryReport(err, null);
     }
   }
 
-  async function sendDebugPatch(err, card) {
+  async function sendTelemetryReport(err, card) {
     try {
       const storageRes = await chrome.storage.local.get('config');
       const config = storageRes.config || {};
       const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
-      const patchUrl = `${baseUrl}/api/debug/patch`;
+      const reportUrl = `${baseUrl}/api/telemetry/report`;
       
       const domSnippet = card ? card.outerHTML.substring(0, 2000) : document.body.innerHTML.substring(0, 2000);
       
-      await fetch(patchUrl, {
+      await fetch(reportUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          error_type: err.name || 'Error',
-          error_message: err.message || String(err),
-          dom_snippet: domSnippet,
-          url: window.location.href
+          error_message: `Selector/Parsing failure: ${err.message || String(err)}`,
+          stack_trace: `${err.stack || ''}\n\nDOM Snippet:\n${domSnippet}`,
+          url: window.location.href,
+          user_agent: navigator.userAgent
         })
       });
     } catch (e) {
-      console.warn('[Etsy Search Extractor] sendDebugPatch failed:', e.message);
+      console.warn('[Etsy Search Extractor] sendTelemetryReport failed:', e.message);
     }
   }
 })();

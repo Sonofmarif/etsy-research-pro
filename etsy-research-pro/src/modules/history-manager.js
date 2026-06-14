@@ -9,6 +9,7 @@ const STORAGE_KEY = 'researchHistory';
 export async function saveRun(runData) {
   const run = {
     run_id: generateRunId(),
+    seed_id: runData.seed_id || '',
     keyword: runData.keyword || '',
     date: new Date().toISOString(),
     product_type: runData.product_type || 'any',

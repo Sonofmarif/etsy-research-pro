@@ -337,11 +337,11 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
     const totalListings = dedupedListings.length;
     const shops = new Set(dedupedListings.map(l => l.shop_name).filter(Boolean));
     const totalShops = shops.size;
-    let avgPrice = 0;
+    let medianPrice = 0;
     if (dedupedListings.length > 0) {
       const prices = dedupedListings.map(l => parseFloat(l.price) || 0).sort((a, b) => a - b);
       const mid = Math.floor(prices.length / 2);
-      avgPrice = prices.length % 2 !== 0 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+      medianPrice = prices.length % 2 !== 0 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
     }
 
     const competitions = keywords.map(k => parseFloat(k.competition) || 0).filter(v => v > 0);
@@ -375,7 +375,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
       validated_keywords: qualifiedCount,
       total_listings: totalListings,
       total_shops: totalShops,
-      avg_price: avgPrice.toFixed(2),
+      avg_price: medianPrice.toFixed(2),
       avg_competition: avgComp.toFixed(0),
       avg_searches: avgSearches.toFixed(0),
       weak_competitor_pct: weakPct.toFixed(1),
@@ -408,7 +408,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
         seed_keyword: seedKeyword, category: seed.category, product_type: productType,
         total_keywords: totalKw, qualified_keywords: qualifiedCount, total_processed: totalProcessed,
         total_listings: totalListings, total_shops: totalShops,
-        avg_price: avgPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
+        avg_price: medianPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
         avg_searches: avgSearches.toFixed(0), weak_competitor_pct: weakPct.toFixed(1),
         has_audits: hasAudits,
         verdict, min_qualified_kw: minQualifiedKw,
@@ -461,7 +461,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
           seed_keyword: seedKeyword, category: seed.category, product_type: productType,
           total_keywords: totalKw, qualified_keywords: qualifiedCount, total_processed: totalProcessed,
           total_listings: totalListings, total_shops: totalShops,
-          avg_price: avgPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
+          avg_price: medianPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
           avg_searches: avgSearches.toFixed(0), weak_competitor_pct: weakPct.toFixed(1),
           has_audits: hasAudits,
           verdict, min_qualified_kw: minQualifiedKw,
@@ -491,7 +491,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
         seed_keyword: seedKeyword, category: seed.category, product_type: productType,
         total_keywords: totalKw, qualified_keywords: qualifiedCount, total_processed: totalProcessed,
         total_listings: totalListings, total_shops: totalShops,
-        avg_price: avgPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
+        avg_price: medianPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
         avg_searches: avgSearches.toFixed(0), weak_competitor_pct: weakPct.toFixed(1),
         has_audits: hasAudits,
         verdict, min_qualified_kw: minQualifiedKw,
@@ -807,7 +807,7 @@ function generateNicheReport(niche, nicheKeywords, nicheListings, nicheAudits, k
       + `(you needed at least ${niche.min_qualified_kw}). `
       + `In these keywords, we found smaller shops (under ${niche.max_shop_reviews_beatable} total shop reviews) ranking in the `
       + `top ${niche.max_listings_per_kw} search results, which means a new shop can realistically compete for visibility. `
-      + `The average listing price is <strong>$${niche.avg_price}</strong> and average monthly searches are <strong>${niche.avg_searches}</strong>.`;
+      + `The median listing price is <strong>$${niche.avg_price}</strong> and average monthly searches are <strong>${niche.avg_searches}</strong>.`;
   } else if (insufficientData && qualRate >= 0.7) {
     explanation = `<strong>Not enough keywords were found to make a confident decision.</strong> `
       + `Only <strong>${niche.total_processed}</strong> keywords were evaluated (you need at least ${niche.min_qualified_kw}), `
@@ -1593,7 +1593,7 @@ footer { color: var(--muted); text-align: center; margin-top: 40px; font-size: 1
   <div class="metric-card"><h3>Qualified</h3><p>${niche.qualified_keywords}/${niche.total_processed}</p></div>
   <div class="metric-card"><h3>Listings</h3><p>${niche.total_listings}</p></div>
   <div class="metric-card"><h3>Shops</h3><p>${niche.total_shops}</p></div>
-  <div class="metric-card"><h3>Avg Price</h3><p>$${niche.avg_price}</p></div>
+  <div class="metric-card"><h3>Median Price</h3><p>$${niche.avg_price}</p></div>
   <div class="metric-card"><h3>Avg Searches</h3><p>${niche.avg_searches}</p></div>
   <div class="metric-card"><h3>Avg Comp</h3><p>${niche.avg_competition}</p></div>
   <!-- 2026-04-17: "Weak Listings %" metric removed. It depended on erank_score,

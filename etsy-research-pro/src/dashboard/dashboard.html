@@ -435,6 +435,31 @@
     </div>
   </footer>
 
+  <!-- Floating Feedback Button -->
+  <button id="btn-report-error" class="floating-feedback-btn" title="Report Error">
+    ⚠️ Report Error
+  </button>
+
+  <!-- Feedback Modal -->
+  <div id="feedback-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <span class="close-btn" id="close-feedback-modal">&times;</span>
+      <h3>⚠️ Report an Issue</h3>
+      <div class="form-row">
+        <label for="feedback-seed-id">Seed ID (Optional)</label>
+        <input type="text" id="feedback-seed-id" placeholder="Current Seed ID or Keyword" readonly>
+      </div>
+      <div class="form-row">
+        <label for="feedback-text">Feedback / Issue Details</label>
+        <textarea id="feedback-text" placeholder="Please describe the issue or behavior you encountered..." rows="4" required></textarea>
+      </div>
+      <div class="btn-row">
+        <button id="btn-submit-feedback" class="btn btn-primary">Submit Feedback</button>
+      </div>
+      <div id="feedback-status-msg" style="display:none; margin-top: 10px; font-weight: bold; text-align: center;"></div>
+    </div>
+  </div>
+
   <script src="dashboard.js"></script>
 </body>
 </html>

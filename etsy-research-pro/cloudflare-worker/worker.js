@@ -59,6 +59,14 @@ export default {
         return handleDebugPatch(request, env, corsHeaders);
       }
 
+      if (path === '/api/telemetry/report' && request.method === 'POST') {
+        return handleTelemetryReport(request, env, corsHeaders);
+      }
+
+      if (path === '/api/feedback/submit' && request.method === 'POST') {
+        return handleFeedbackSubmit(request, env, corsHeaders);
+      }
+
       return json({ error: 'Not found' }, corsHeaders, 404);
 
     } catch (err) {
@@ -485,6 +493,66 @@ function generateAiImagePrompt(keyword, winScore) {
     prompt = `Simple product display of ${cleanKeyword}, neutral aesthetic background, bright even lighting, commercial layout --ar 1:1`;
   }
   return prompt;
+}
+
+async function handleTelemetryReport(request, env, cors) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON' }, cors, 400);
+  }
+
+  const errorMessage = sanitize(body.error_message || '').substring(0, 1000);
+  const stackTrace = sanitize(body.stack_trace || '').substring(0, 4000);
+  const pageUrl = sanitize(body.url || '').substring(0, 500);
+  const userAgent = sanitize(body.user_agent || '').substring(0, 500);
+
+  if (!errorMessage) {
+    return json({ error: 'Error message required' }, cors, 400);
+  }
+
+  const formattedMsg = `[Client Telemetry] ${errorMessage}`;
+  try {
+    await env.DB.prepare(
+      'INSERT INTO error_logs (error_message, stack_trace, url, user_agent) VALUES (?, ?, ?, ?)'
+    ).bind(formattedMsg, stackTrace, pageUrl, userAgent).run();
+  } catch (err) {
+    console.error('[Worker TelemetryReport] DB sync fail:', err.message);
+    return json({ error: 'Database sync failed', message: err.message }, cors, 500);
+  }
+
+  return json({ success: true }, cors);
+}
+
+async function handleFeedbackSubmit(request, env, cors) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON' }, cors, 400);
+  }
+
+  const seedId = sanitize(body.seed_id || 'None').substring(0, 255);
+  const feedback = sanitize(body.feedback || '').substring(0, 4000);
+  const pageUrl = sanitize(body.url || '').substring(0, 500);
+  const userAgent = sanitize(body.user_agent || '').substring(0, 500);
+
+  if (!feedback) {
+    return json({ error: 'Feedback message required' }, cors, 400);
+  }
+
+  const msg = `[User Feedback] Seed ID: ${seedId}`;
+  try {
+    await env.DB.prepare(
+      'INSERT INTO error_logs (error_message, stack_trace, url, user_agent) VALUES (?, ?, ?, ?)'
+    ).bind(msg, feedback, pageUrl, userAgent).run();
+  } catch (err) {
+    console.error('[Worker Feedback] DB sync fail:', err.message);
+    return json({ error: 'Database sync failed', message: err.message }, cors, 500);
+  }
+
+  return json({ success: true }, cors);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────

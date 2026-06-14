@@ -4,6 +4,32 @@
 (function() {
   'use strict';
 
+  async function sendTelemetryReport(err, context = {}) {
+    try {
+      const storageRes = await chrome.storage.local.get('config');
+      const config = storageRes.config || {};
+      const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
+      const reportUrl = `${baseUrl}/api/telemetry/report`;
+
+      const errorState = {
+        error_message: err.message || String(err),
+        stack_trace: err.stack || '',
+        url: window.location.href,
+        user_agent: navigator.userAgent,
+        time: new Date().toISOString(),
+        ...context
+      };
+
+      await fetch(reportUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(errorState)
+      });
+    } catch (e) {
+      console.warn('[Telemetry] sendTelemetryReport failed:', e.message);
+    }
+  }
+
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'checkErankLogin') {
       handleCheckLogin(sendResponse);
@@ -112,6 +138,8 @@
 
       sendResponse({ success: true, data });
     } catch (err) {
+      console.error('[eRank Keyword Extractor] handleExtractKeywordData error:', err);
+      sendTelemetryReport(err, { component: 'erank-keyword-extractor', action: 'extractKeywordData' });
       sendResponse({ success: false, error: err.message });
     }
   }
@@ -635,6 +663,8 @@
       console.log(`[eRank Extractor] Pagination: hasMore=${hasMore}, currentPage=${currentPage}, total=${pagInfo.totalItems}, paginatorFound=${pagInfo.found}`);
       sendResponse({ success: true, suggestions, hasMore, currentPage, totalFound: suggestions.length });
     } catch (err) {
+      console.error('[eRank Keyword Extractor] handleExtractSuggestions error:', err);
+      sendTelemetryReport(err, { component: 'erank-keyword-extractor', action: 'extractSuggestions' });
       sendResponse({ success: false, error: err.message, suggestions: [] });
     }
   }
@@ -820,6 +850,7 @@
       }
     } catch (err) {
       console.error('[eRank Extractor] handleNextPage error:', err);
+      sendTelemetryReport(err, { component: 'erank-keyword-extractor', action: 'goToNextPage' });
       sendResponse({ hasMore: false, error: err.message });
     }
   }

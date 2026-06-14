@@ -1272,12 +1272,12 @@ async function saveFinalResults(seedKeyword, step4Result, config) {
   const avgScore = scoredListings.length > 0
     ? Math.round(scoredListings.reduce((sum, l) => sum + l.scores.win_score, 0) / scoredListings.length)
     : 0;
-  let avgPrice = 0;
+  let medianPrice = 0;
   if (scoredListings.length > 0) {
     const prices = scoredListings.map(l => parseFloat(l.price) || 0).sort((a, b) => a - b);
     const mid = Math.floor(prices.length / 2);
-    avgPrice = prices.length % 2 !== 0 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
-    avgPrice = Math.round(avgPrice * 100) / 100;
+    medianPrice = prices.length % 2 !== 0 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+    medianPrice = Math.round(medianPrice * 100) / 100;
   }
   const avgReviews = scoredListings.length > 0
     ? Math.round(scoredListings.reduce((sum, l) => sum + l.shop_reviews, 0) / scoredListings.length)
@@ -1333,7 +1333,7 @@ async function saveFinalResults(seedKeyword, step4Result, config) {
         win_score: cAvgScore,
         opportunity: `Low-competition segment for ${c.concept_label} products with high demand opportunity.`,
         target_buyer: `Etsy shoppers searching for custom ${c.concept_label} items.`,
-        price_recommendation: `$${Math.max(5, Math.round(avgPrice - 5))}-${Math.round(avgPrice + 5)}`,
+        price_recommendation: `$${Math.max(5, Math.round(medianPrice - 5))}-${Math.round(medianPrice + 5)}`,
         image_prompt: `Commercial product display of ${c.concept_label}, clean aesthetic background, studio lighting --ar 4:3`,
         verdict: `${verdict} — Strong opportunities in ${c.concept_label}`,
         keywords_to_target: keywordsToTarget
@@ -1347,7 +1347,7 @@ async function saveFinalResults(seedKeyword, step4Result, config) {
     total: scoredListings.length,
     wins: wins.length,
     avg_win_score: avgScore,
-    avg_price: avgPrice,
+    avg_price: medianPrice,
     beatable_slots: beatableSlots,
     avg_reviews: avgReviews,
     ai_mode: config.ai_provider || 'none',
@@ -1355,6 +1355,7 @@ async function saveFinalResults(seedKeyword, step4Result, config) {
   };
 
   await saveRun({
+    seed_id: seedId,
     keyword: seedKeyword,
     product_type: config.product_type_filter || 'any',
     source: stats.source,
@@ -1378,6 +1379,7 @@ async function saveFinalResults(seedKeyword, step4Result, config) {
   });
 
   const lastResearchResults = {
+    seed_id: seedId,
     keyword: seedKeyword,
     product_type: config.product_type_filter || 'any',
     stats,
