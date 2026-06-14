@@ -894,19 +894,18 @@ async function runFullPipeline(seedKeyword, options = {}) {
     // Fetch directly from chrome.storage.local to resolve configuration sync issues
     const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
     const freshConfig = storageRes.config || {};
-    const minQualifiedKw = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(freshConfig.min_qualified_keywords) || parseInt(freshConfig.minQualifiedKeywords) || 5;
+    const minQualifiedKwVal = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(freshConfig.min_qualified_keywords) || parseInt(freshConfig.minQualifiedKeywords) || 5;
     const delayBetweenPages = parseInt(storageRes.delayBetweenPages) || parseInt(storageRes.delay_between_pages) || parseInt(freshConfig.delay_between_pages) || parseInt(freshConfig.delayBetweenPages) || 3;
     
     const fetchedSettings = {
       ...freshConfig,
-      minQualifiedKeywords: minQualifiedKw,
-      min_qualified_keywords: minQualifiedKw,
+      minQualifiedKeywords: minQualifiedKwVal,
+      min_qualified_keywords: minQualifiedKwVal,
       delayBetweenPages: delayBetweenPages,
       delay_between_pages: delayBetweenPages
     };
 
     const config = { ...fetchedSettings, ...options };
-    const minQualifiedKwVal = config.min_qualified_keywords;
 
     console.log("DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
     await log('info', "DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
@@ -1098,21 +1097,21 @@ async function runSingleStep(stepNum, seedKeyword, options = {}) {
   try {
     await log('info', `=== Running Step ${stepNum}: ${stepNames[stepNum]} for "${seedKeyword}" ===`);
     // Fetch directly from chrome.storage.local to resolve configuration sync issues
+    // Fetch directly from chrome.storage.local to resolve configuration sync issues
     const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
     const freshConfig = storageRes.config || {};
-    const minQualifiedKw = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(freshConfig.min_qualified_keywords) || parseInt(freshConfig.minQualifiedKeywords) || 5;
+    const minQualifiedKwVal = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(freshConfig.min_qualified_keywords) || parseInt(freshConfig.minQualifiedKeywords) || 5;
     const delayBetweenPages = parseInt(storageRes.delayBetweenPages) || parseInt(storageRes.delay_between_pages) || parseInt(freshConfig.delay_between_pages) || parseInt(freshConfig.delayBetweenPages) || 3;
     
     const fetchedSettings = {
       ...freshConfig,
-      minQualifiedKeywords: minQualifiedKw,
-      min_qualified_keywords: minQualifiedKw,
+      minQualifiedKeywords: minQualifiedKwVal,
+      min_qualified_keywords: minQualifiedKwVal,
       delayBetweenPages: delayBetweenPages,
       delay_between_pages: delayBetweenPages
     };
 
     const config = { ...fetchedSettings, ...options };
-    const minQualifiedKwVal = config.min_qualified_keywords;
 
     console.log("DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
     await log('info', "DEBUG: Pipeline starting with threshold: " + fetchedSettings.minQualifiedKeywords);
