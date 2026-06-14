@@ -948,15 +948,15 @@ async function runFullPipeline(seedKeyword, options = {}) {
     await log('success', `Step 1 done: ${step1.newKeywordsFound} new keywords`);
 
     // Pre-Step 2 Gate
-    const minQualifiedKw = parseInt(config.min_qualified_keywords) || 5;
+    const minQualifiedKwThreshold = parseInt(config.min_qualified_keywords) || 5;
     const step1Usable = (step1.newKeywordsFound || 0) + (step1.refreshedCount || 0);
     let availableForSeed = step1Usable;
-    if (step1Usable < minQualifiedKw) {
+    if (step1Usable < minQualifiedKwThreshold) {
       availableForSeed = await countAvailableKeywordsForSeed(apiClient, seedKeyword, config);
     }
 
-    if (availableForSeed < minQualifiedKw) {
-      await log('warn', `Surfaced only ${availableForSeed} keywords (minimum ${minQualifiedKw}). Skipping Steps 2 & 3.`);
+    if (availableForSeed < minQualifiedKwThreshold) {
+      await log('warn', `Surfaced only ${availableForSeed} keywords (minimum ${minQualifiedKwThreshold}). Skipping Steps 2 & 3.`);
       await setStepStatus('snapshot', 'skipped');
       await setStepStatus('listing_audit', 'skipped');
       await setStepStatus('final_report', 'running');
@@ -968,7 +968,7 @@ async function runFullPipeline(seedKeyword, options = {}) {
       }, seedKeyword, {
         insufficientKeywords: true,
         availableCount: availableForSeed,
-        minRequired: minQualifiedKw,
+        minRequired: minQualifiedKwThreshold,
         pipelineRunId,
         pipelineStartedAt,
         capturedKeywords: step1.qualifyingKeywords || []
@@ -981,7 +981,7 @@ async function runFullPipeline(seedKeyword, options = {}) {
         running: false,
         currentStep: `Pipeline Complete: "${seedKeyword}" — NO-GO`,
         lastStatus: 'success',
-        progress: `Keywords: ${availableForSeed}/${minQualifiedKw} — insufficient`
+        progress: `Keywords: ${availableForSeed}/${minQualifiedKwThreshold} — insufficient`
       });
       await _archive('success');
       return;
