@@ -592,7 +592,7 @@ Do NOT include any greetings, markdown formatting, or prefix text. Return ONLY t
 }
 
 // Helper to perform hard refresh of storage configuration settings
-async function getCurrentSettings() {
+async function getLiveSettings() {
   const storageRes = await chrome.storage.local.get(['config', 'minQualifiedKeywords', 'min_qualified_keywords', 'delayBetweenPages', 'delay_between_pages']);
   const freshConfig = storageRes.config || {};
   const minQualifiedKw = parseInt(storageRes.minQualifiedKeywords) || parseInt(storageRes.min_qualified_keywords) || parseInt(freshConfig.min_qualified_keywords) || parseInt(freshConfig.minQualifiedKeywords) || 5;
@@ -621,10 +621,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const seedKeyword = msg.seedKeyword || msg.keyword || '';
           
           // Force storage sync by doing an async read from chrome.storage.local
-          const settings = await getCurrentSettings();
+          const settings = await getLiveSettings();
           const mergedOptions = { ...settings, ...(msg.options || {}) };
           const minQualifiedKw = mergedOptions.min_qualified_keywords;
-          console.log(`Pipeline running with MinQualifiedKeywords: ${minQualifiedKw}`);
+          console.log(`Scraper starting with threshold: ${minQualifiedKw}`);
           
           await updateState({
             running: true,
@@ -881,12 +881,12 @@ async function runFullPipeline(seedKeyword, options = {}) {
     });
 
     // Fetch directly from chrome.storage.local to resolve configuration sync issues
-    const settings = await getCurrentSettings();
+    const settings = await getLiveSettings();
     const config = { ...settings, ...options };
     const minQualifiedKwVal = config.min_qualified_keywords;
 
-    console.log(`Pipeline running with MinQualifiedKeywords: ${minQualifiedKwVal}`);
-    await log('info', `Pipeline running with MinQualifiedKeywords: ${minQualifiedKwVal}`);
+    console.log(`Scraper starting with threshold: ${minQualifiedKwVal}`);
+    await log('info', `Scraper starting with threshold: ${minQualifiedKwVal}`);
 
     const tabId = await getOrCreateWorkTab();
 
@@ -1075,12 +1075,12 @@ async function runSingleStep(stepNum, seedKeyword, options = {}) {
   try {
     await log('info', `=== Running Step ${stepNum}: ${stepNames[stepNum]} for "${seedKeyword}" ===`);
     // Fetch directly from chrome.storage.local to resolve configuration sync issues
-    const settings = await getCurrentSettings();
+    const settings = await getLiveSettings();
     const config = { ...settings, ...options };
     const minQualifiedKwVal = config.min_qualified_keywords;
 
-    console.log(`Pipeline running with MinQualifiedKeywords: ${minQualifiedKwVal}`);
-    await log('info', `Pipeline running with MinQualifiedKeywords: ${minQualifiedKwVal}`);
+    console.log(`Scraper starting with threshold: ${minQualifiedKwVal}`);
+    await log('info', `Scraper starting with threshold: ${minQualifiedKwVal}`);
     const logFn = (type, msg) => {
       log(type, `[Step ${stepNum}] ${msg}`);
       updateState({ progress: msg });
