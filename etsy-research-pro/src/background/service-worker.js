@@ -166,17 +166,15 @@ class LocalStorageClient {
   }
 
   async readConfig() {
-    if (this._configCache) return this._configCache;
-    this._configCache = await loadConfig();
-    return this._configCache;
+    return await loadConfig();
   }
 
   async getConfig() {
-    return this.readConfig();
+    return await loadConfig();
   }
 
   invalidateConfig() {
-    this._configCache = null;
+    // no-op
   }
 
   async _getTable(table) {
@@ -626,6 +624,34 @@ async function getLiveSettings() {
 // ─── Message handler ──────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   try {
+    if (msg.action === 'sendFeedback') {
+      (async () => {
+        try {
+          const config = await loadConfig();
+          const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
+          const telemetryUrl = `${baseUrl}/api/logs/telemetry`;
+          const response = await fetch(telemetryUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              error_message: `[User Feedback] ${msg.notes}`,
+              stack_trace: 'User feedback note',
+              url: 'Popup Feedback Form',
+              user_agent: 'Etsy Research Pro Extension'
+            })
+          });
+          if (response.ok) {
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: `Worker returned ${response.status}` });
+          }
+        } catch (e) {
+          sendResponse({ success: false, error: e.message });
+        }
+      })();
+      return true;
+    }
+
     // ── Start Research / Start Pipeline ──
     if (msg.action === 'startResearch' || msg.action === 'startPipeline') {
       (async () => {
@@ -1246,9 +1272,13 @@ async function saveFinalResults(seedKeyword, step4Result, config) {
   const avgScore = scoredListings.length > 0
     ? Math.round(scoredListings.reduce((sum, l) => sum + l.scores.win_score, 0) / scoredListings.length)
     : 0;
-  const avgPrice = scoredListings.length > 0
-    ? Math.round(scoredListings.reduce((sum, l) => sum + l.price, 0) / scoredListings.length * 100) / 100
-    : 0;
+  let avgPrice = 0;
+  if (scoredListings.length > 0) {
+    const prices = scoredListings.map(l => parseFloat(l.price) || 0).sort((a, b) => a - b);
+    const mid = Math.floor(prices.length / 2);
+    avgPrice = prices.length % 2 !== 0 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+    avgPrice = Math.round(avgPrice * 100) / 100;
+  }
   const avgReviews = scoredListings.length > 0
     ? Math.round(scoredListings.reduce((sum, l) => sum + l.shop_reviews, 0) / scoredListings.length)
     : 0;

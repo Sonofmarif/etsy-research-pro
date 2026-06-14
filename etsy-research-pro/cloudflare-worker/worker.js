@@ -55,6 +55,10 @@ export default {
         return handleTelemetry(request, env, corsHeaders);
       }
 
+      if (path === '/api/debug/patch' && request.method === 'POST') {
+        return handleDebugPatch(request, env, corsHeaders);
+      }
+
       return json({ error: 'Not found' }, corsHeaders, 404);
 
     } catch (err) {
@@ -440,6 +444,33 @@ async function handleTelemetry(request, env, cors) {
   }
 
   return json({ success: true }, cors);
+}
+
+// ─── POST /api/debug/patch ───────────────────────────────────────────────────
+async function handleDebugPatch(request, env, cors) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON' }, cors, 400);
+  }
+
+  const errorType = sanitize(body.error_type || 'UnknownError').substring(0, 255);
+  const errorMessage = sanitize(body.error_message || '').substring(0, 1000);
+  const domSnippet = sanitize(body.dom_snippet || '').substring(0, 4000);
+  const pageUrl = sanitize(body.url || '').substring(0, 500);
+
+  const fullErrorMessage = `[Selector Failure] ${errorType}: ${errorMessage}`;
+  try {
+    await env.DB.prepare(
+      'INSERT INTO error_logs (error_message, stack_trace, url, user_agent) VALUES (?, ?, ?, ?)'
+    ).bind(fullErrorMessage, domSnippet, pageUrl, 'Self-Healing Selector Patch Engine').run();
+  } catch (err) {
+    console.error('[Worker DebugPatch] DB sync fail:', err.message);
+    return json({ error: 'Database sync failed', message: err.message }, cors, 500);
+  }
+
+  return json({ success: true, patch_applied: false }, cors);
 }
 
 // ─── Prompt Generation Engine helper function (Fallback) ───────────────────

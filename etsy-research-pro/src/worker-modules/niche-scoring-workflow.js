@@ -190,14 +190,34 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
       home_decor: ['wall art', 'home decor', 'farmhouse', 'modern', 'rustic', 'boho', 'minimalist', 'canvas', 'poster']
     };
 
-    if (!seed.category || seed.category.trim() === '') {
+    const categoryMap = {
+      healthcare: 'Healthcare',
+      education: 'Education',
+      mental_health: 'Mental Health',
+      hospitality: 'Hospitality',
+      spirituality: 'Spiritual',
+      wellness: 'Wellness',
+      professional: 'Professional',
+      home_office: 'Templates & Planning',
+      pets: 'Pets',
+      weddings: 'Weddings',
+      kids: 'Kids & Baby',
+      seasonal: 'Seasonal & Holiday',
+      crafts: 'Crafts & SVG',
+      home_decor: 'Home Decor'
+    };
+
+    if (!seed.category || seed.category.trim() === '' || seed.category.trim() === '—') {
       const kw = seedKeyword.toLowerCase();
-      let cat = seedKeyword;
+      let cat = 'Other';
       for (const [c, patterns] of Object.entries(CATEGORY_PATTERNS)) {
         for (const p of patterns) {
-          if (kw.includes(p)) { cat = c; break; }
+          if (kw.includes(p)) { cat = categoryMap[c] || c; break; }
         }
-        if (cat !== seedKeyword) break;
+        if (cat !== 'Other') break;
+      }
+      if (cat === 'Other') {
+        cat = seedKeyword.replace(/\b\w/g, c => c.toUpperCase());
       }
       seed.category = cat;
       await sheetsClient.updateRowByMatch('seed_keywords', 'seed_id', seed.seed_id, { category: cat });
@@ -317,7 +337,12 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
     const totalListings = dedupedListings.length;
     const shops = new Set(dedupedListings.map(l => l.shop_name).filter(Boolean));
     const totalShops = shops.size;
-    const avgPrice = dedupedListings.length > 0 ? dedupedListings.reduce((s, l) => s + (parseFloat(l.price) || 0), 0) / dedupedListings.length : 0;
+    let avgPrice = 0;
+    if (dedupedListings.length > 0) {
+      const prices = dedupedListings.map(l => parseFloat(l.price) || 0).sort((a, b) => a - b);
+      const mid = Math.floor(prices.length / 2);
+      avgPrice = prices.length % 2 !== 0 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+    }
 
     const competitions = keywords.map(k => parseFloat(k.competition) || 0).filter(v => v > 0);
     const searchVols = keywords.map(k => parseFloat(k.avg_searches) || 0).filter(v => v > 0);
@@ -1666,6 +1691,59 @@ async function runInsufficientKeywordsReport(sheetsClient, config, log, seedKeyw
   if (!seed) {
     log('error', `Seed "${seedKeyword}" not found — cannot render short report`);
     return { verdict: 'NO-GO', qualifiedCount: 0, totalProcessed: 0, reportsGenerated: 0 };
+  }
+
+  const CATEGORY_PATTERNS = {
+    healthcare: ['nurse', 'doctor', 'pharmacist', 'dentist', 'veterinarian', 'paramedic', 'doula', 'midwife', 'medical', 'hospital'],
+    education: ['teacher', 'student', 'classroom', 'tutor', 'librarian', 'school', 'professor', 'homeschool'],
+    mental_health: ['adhd', 'autism', 'anxiety', 'dyslexia', 'grief', 'sobriety', 'therapist', 'counselor', 'depression', 'mindfulness'],
+    hospitality: ['airbnb', 'hotel', 'guest', 'host', 'vacation', 'rental', 'bnb'],
+    spirituality: ['tarot', 'astrology', 'witchcraft', 'manifestation', 'meditation', 'crystal', 'chakra', 'zodiac'],
+    wellness: ['affirmation', 'gratitude', 'self-care', 'yoga', 'fitness', 'workout', 'health', 'nutrition'],
+    professional: ['realtor', 'accountant', 'hairstylist', 'esthetician', 'electrician', 'mechanic', 'bartender', 'firefighter', 'lawyer', 'consultant'],
+    home_office: ['planner', 'tracker', 'organizer', 'spreadsheet', 'template', 'printable', 'productivity', 'budget'],
+    pets: ['dog', 'cat', 'pet', 'puppy', 'kitten', 'animal', 'paw'],
+    weddings: ['wedding', 'bride', 'groom', 'bridal', 'engagement', 'bachelorette', 'bridesmaid'],
+    kids: ['baby', 'toddler', 'nursery', 'kids', 'children', 'newborn', 'infant'],
+    seasonal: ['christmas', 'halloween', 'easter', 'valentine', 'thanksgiving', 'holiday', 'summer', 'winter'],
+    crafts: ['svg', 'cricut', 'silhouette', 'craft', 'sewing', 'knitting', 'embroidery', 'crochet'],
+    home_decor: ['wall art', 'home decor', 'farmhouse', 'modern', 'rustic', 'boho', 'minimalist', 'canvas', 'poster']
+  };
+
+  const categoryMap = {
+    healthcare: 'Healthcare',
+    education: 'Education',
+    mental_health: 'Mental Health',
+    hospitality: 'Hospitality',
+    spirituality: 'Spiritual',
+    wellness: 'Wellness',
+    professional: 'Professional',
+    home_office: 'Templates & Planning',
+    pets: 'Pets',
+    weddings: 'Weddings',
+    kids: 'Kids & Baby',
+    seasonal: 'Seasonal & Holiday',
+    crafts: 'Crafts & SVG',
+    home_decor: 'Home Decor'
+  };
+
+  if (!seed.category || seed.category.trim() === '' || seed.category.trim() === '—') {
+    const kw = seedKeyword.toLowerCase();
+    let cat = 'Other';
+    for (const [c, patterns] of Object.entries(CATEGORY_PATTERNS)) {
+      for (const p of patterns) {
+        if (kw.includes(p)) { cat = categoryMap[c] || c; break; }
+      }
+      if (cat !== 'Other') break;
+    }
+    if (cat === 'Other') {
+      cat = seedKeyword.replace(/\b\w/g, c => c.toUpperCase());
+    }
+    seed.category = cat;
+    try {
+      await sheetsClient.updateRowByMatch('seed_keywords', 'seed_id', seed.seed_id, { category: cat });
+      log('info', `🏷️ Auto-assigned category on short report: "${cat}"`);
+    } catch(e) {}
   }
 
   const seedId = String(seed.seed_id);

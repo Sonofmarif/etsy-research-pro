@@ -45,7 +45,12 @@
       connListingAudit: $('conn-listing-audit'),
       
       progressStepName: $('progress-step-name'),
-      progressDetails: $('progress-details')
+      progressDetails: $('progress-details'),
+      
+      // Feedback
+      feedbackNotes: $('feedback-notes'),
+      btnSendFeedback: $('btn-send-feedback'),
+      feedbackSent: $('feedback-sent')
     };
   }
 
@@ -63,6 +68,7 @@
     dom.btnSaveSettings.addEventListener('click', saveSettings);
     dom.btnStartPipeline.addEventListener('click', startPipeline);
     dom.btnStopPipeline.addEventListener('click', stopPipeline);
+    dom.btnSendFeedback.addEventListener('click', sendFeedback);
   }
 
   // ─── Open Dashboard ──────────────────────────────────────────────────────
@@ -299,6 +305,29 @@
     } else if (prevStepStatus === 'running') {
       connector.classList.add('active');
     }
+  }
+
+  async function sendFeedback() {
+    const notes = dom.feedbackNotes.value.trim();
+    if (!notes) return;
+
+    dom.btnSendFeedback.disabled = true;
+    dom.btnSendFeedback.innerHTML = '<span class="btn-icon">✉️</span> Sending...';
+
+    chrome.runtime.sendMessage({
+      action: 'sendFeedback',
+      notes: notes
+    }, (response) => {
+      dom.btnSendFeedback.disabled = false;
+      dom.btnSendFeedback.innerHTML = '<span class="btn-icon">✉️</span> Send Feedback';
+      if (response && response.success) {
+        dom.feedbackNotes.value = '';
+        dom.feedbackSent.style.display = 'inline';
+        setTimeout(() => { dom.feedbackSent.style.display = 'none'; }, 3000);
+      } else {
+        alert('Failed to send feedback: ' + (response ? response.error : 'Unknown error'));
+      }
+    });
   }
 
   // Cleanup on unload
