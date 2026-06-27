@@ -163,6 +163,24 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
       if (name) shopLookup[name] = store;
     }
 
+    // Merge shop data from listing_audit if available
+    for (const audit of allAudits) {
+      const listing = allListings.find(l => String(l.listing_id) === String(audit.listing_id));
+      if (listing) {
+        const sName = (listing.shop_name || '').toLowerCase();
+        if (sName) {
+          if (!shopLookup[sName]) shopLookup[sName] = { shop_name: listing.shop_name };
+          const s = shopLookup[sName];
+          if (audit.shop_review_count !== undefined && audit.shop_review_count !== null) s.shop_review_count = audit.shop_review_count;
+          if (audit.shop_total_sales !== undefined && audit.shop_total_sales !== null) s.total_sales = audit.shop_total_sales;
+          if (audit.shop_established !== undefined && audit.shop_established !== null) s.shop_established = audit.shop_established;
+          if (audit.shop_location !== undefined && audit.shop_location !== null) s.shop_location = audit.shop_location;
+          if (audit.is_star_seller !== undefined && audit.is_star_seller !== null) s.is_star_seller = audit.is_star_seller;
+          if (audit.shop_rating !== undefined && audit.shop_rating !== null) s.shop_rating = audit.shop_rating;
+        }
+      }
+    }
+
     // Find this seed
     const seed = seeds.find(s => (s.keyword || '').toLowerCase().trim() === seedKeyword.toLowerCase().trim());
     if (!seed) {
@@ -344,9 +362,9 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
       medianPrice = prices.length % 2 !== 0 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
     }
 
-    const competitions = keywords.map(k => parseFloat(k.competition) || 0).filter(v => v > 0);
+    const validCompetitions = keywords.filter(k => k.competition !== null && k.competition !== undefined && String(k.competition).trim() !== '').map(k => parseFloat(k.competition));
     const searchVols = keywords.map(k => parseFloat(k.avg_searches) || 0).filter(v => v > 0);
-    const avgComp = competitions.length > 0 ? competitions.reduce((s, v) => s + v, 0) / competitions.length : 0;
+    const avgComp = validCompetitions.length > 0 ? validCompetitions.reduce((s, v) => s + v, 0) / validCompetitions.length : null;
     const avgSearches = searchVols.length > 0 ? searchVols.reduce((s, v) => s + v, 0) / searchVols.length : 0;
 
     // Product type — use the user's selected filter from settings, not auto-detection
@@ -376,7 +394,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
       total_listings: totalListings,
       total_shops: totalShops,
       avg_price: medianPrice.toFixed(2),
-      avg_competition: avgComp.toFixed(0),
+      avg_competition: avgComp !== null ? avgComp.toFixed(0) : null,
       avg_searches: avgSearches.toFixed(0),
       weak_competitor_pct: weakPct.toFixed(1),
       readiness_score: qualifiedCount + '/' + totalProcessed,
@@ -408,7 +426,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
         seed_keyword: seedKeyword, category: seed.category, product_type: productType,
         total_keywords: totalKw, qualified_keywords: qualifiedCount, total_processed: totalProcessed,
         total_listings: totalListings, total_shops: totalShops,
-        avg_price: medianPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
+        avg_price: medianPrice.toFixed(2), avg_competition: avgComp !== null ? avgComp.toFixed(0) : null,
         avg_searches: avgSearches.toFixed(0), weak_competitor_pct: weakPct.toFixed(1),
         has_audits: hasAudits,
         verdict, min_qualified_kw: minQualifiedKw,
@@ -425,35 +443,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
       reportsGenerated = 1;
       log('success', `📄 Report downloaded: ${filename}`);
 
-      // Best-effort: also upload the HTML to the dashboard so /report.php
-      // can serve the EXACT same file the user just downloaded. Only GO
-      // verdicts are cached server-side per product spec; NO-GO falls back
-      // to the dashboard's DB-rendered view. Failures here NEVER break the
-      // pipeline — local download already succeeded.
-      try {
-        const isGoVerdict = typeof verdict === 'string' && verdict.toUpperCase().startsWith('GO');
-        const runId       = opts && opts.pipelineRunId ? Number(opts.pipelineRunId) : 0;
-        const licenseKey  = sheetsClient && sheetsClient.licenseKey ? sheetsClient.licenseKey : '';
-        if (isGoVerdict && runId > 0 && licenseKey) {
-          const res = await fetch('https://app.nichemoat.com/api/report-upload.php', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'text/html; charset=utf-8',
-              'X-License-Key': licenseKey,
-              'X-Run-Id':      String(runId),
-              'X-Verdict':     verdict,
-            },
-            body: html,
-          });
-          if (res.ok) {
-            log('info', `📤 Report cached on dashboard for run ${runId}`);
-          } else {
-            log('warn', `Dashboard report upload returned ${res.status}`);
-          }
-        }
-      } catch (uploadErr) {
-        log('warn', `Dashboard report upload skipped: ${uploadErr.message}`);
-      }
+      // Local download succeeded. Server cache upload removed for privacy and open-source compliance.
     } catch (e) {
       log('warn', `Report download failed: ${e.message}`);
       try {
@@ -461,7 +451,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
           seed_keyword: seedKeyword, category: seed.category, product_type: productType,
           total_keywords: totalKw, qualified_keywords: qualifiedCount, total_processed: totalProcessed,
           total_listings: totalListings, total_shops: totalShops,
-          avg_price: medianPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
+          avg_price: medianPrice.toFixed(2), avg_competition: avgComp !== null ? avgComp.toFixed(0) : null,
           avg_searches: avgSearches.toFixed(0), weak_competitor_pct: weakPct.toFixed(1),
           has_audits: hasAudits,
           verdict, min_qualified_kw: minQualifiedKw,
@@ -491,7 +481,7 @@ export async function runNicheScoring(sheetsClient, config, log, seedKeyword, op
         seed_keyword: seedKeyword, category: seed.category, product_type: productType,
         total_keywords: totalKw, qualified_keywords: qualifiedCount, total_processed: totalProcessed,
         total_listings: totalListings, total_shops: totalShops,
-        avg_price: medianPrice.toFixed(2), avg_competition: avgComp.toFixed(0),
+        avg_price: medianPrice.toFixed(2), avg_competition: avgComp !== null ? avgComp.toFixed(0) : null,
         avg_searches: avgSearches.toFixed(0), weak_competitor_pct: weakPct.toFixed(1),
         has_audits: hasAudits,
         verdict, min_qualified_kw: minQualifiedKw,
@@ -632,8 +622,8 @@ function computeKeywordOpportunityScores(keywords, keywordResults, audits, dedup
       const scoreListing = (l) => {
         const audit = auditByListingId[String(l.listing_id)] || {};
         const shop = shopLookup[(l.shop_name || '').toLowerCase()] || {};
-        const shopRevs = parseInt(shop.shop_review_count);
-        const isBeatable = !isNaN(shopRevs) && shopRevs < maxShopReviewsBeatable;
+        const shopRevs = shop.shop_review_count !== undefined && shop.shop_review_count !== null ? parseInt(shop.shop_review_count) : null;
+        const isBeatable = shopRevs !== null && !isNaN(shopRevs) && shopRevs < maxShopReviewsBeatable;
 
         const hit = {};
         // 1. Bestseller badge
@@ -887,7 +877,7 @@ function generateNicheReport(niche, nicheKeywords, nicheListings, nicheAudits, k
   const oppTableRows = scoredKeywords.slice(0, 30).map((sk, idx) => {
     const etsySearchUrl = `https://www.etsy.com/search?q=${encodeURIComponent(sk.keyword)}${ptfParam}`;
     const searchesDisp = sk.searches > 0 ? sk.searches.toLocaleString() : '';
-    const compDisp = sk.competition > 0 ? sk.competition.toLocaleString() : '';
+    const compDisp = sk.competition > 0 ? sk.competition.toLocaleString() : MUTED;
     const ctrDisp = formatClickRate(sk.click_rate);
     const scoreDisp = sk.totalScore.toFixed(1);
     const scoreCls = sk.totalScore >= 50 ? 'opp-high' : sk.totalScore >= 25 ? 'opp-mid' : 'opp-low';
@@ -930,10 +920,13 @@ function generateNicheReport(niche, nicheKeywords, nicheListings, nicheAudits, k
         const price = parseFloat(l.price);
         const listingUrl = l.etsy_url || `https://www.etsy.com/listing/${l.listing_id}`;
         const shopData = shopLookup[shop.toLowerCase()] || {};
-        const shopRevs = parseInt(shopData.shop_review_count) || 0;
+        const _rawShopRevs = parseInt(shopData.shop_review_count);
+        const shopRevs = !isNaN(_rawShopRevs) ? _rawShopRevs : null;
         // Shop rating: prefer listing-level rating (set by Step 3 on etsy_listings)
         // because etsy_stores.shop_rating often isn't populated by Step 2
-        const shopRat = parseFloat(l.rating) || parseFloat(shopData.shop_rating) || 0;
+        const _rawLRat = parseFloat(l.rating);
+        const _rawSRat = parseFloat(shopData.shop_rating);
+        const shopRat = !isNaN(_rawLRat) ? _rawLRat : (!isNaN(_rawSRat) ? _rawSRat : null);
         const shopSales = parseInt(shopData.total_sales) || 0;
         const shopLocation = (shopData.shop_location || '').trim();
         const shopEstablished = (shopData.shop_established || '').trim();
@@ -986,6 +979,12 @@ function generateNicheReport(niche, nicheKeywords, nicheListings, nicheAudits, k
         }
         if (!isNaN(views24) && views24 > 0) signals.push(`<span class="chip">👁 ${views24.toLocaleString()} views/24h</span>`);
         if (!isNaN(favCount) && favCount > 0) signals.push(`<span class="chip chip-fav">❤️ ${favCount.toLocaleString()} favorites</span>`);
+
+        const discountPct = parseInt(l.discount_pct);
+        const originalPrice = parseFloat(l.original_price);
+        if (!isNaN(discountPct) && discountPct > 0 && !isNaN(originalPrice) && originalPrice > 0) {
+          signals.push(`<span class="chip chip-hot" style="background:#dcfce7;color:#166534;">${discountPct}% off · Was $${originalPrice.toFixed(2)}</span>`);
+        }
 
         // Media info
         const mediaChips = [];
@@ -1065,13 +1064,13 @@ function generateNicheReport(niche, nicheKeywords, nicheListings, nicheAudits, k
           <div class="detail-right">
             <div class="shop-label">Shop</div>
             <a class="detail-shop-link" href="${esc(shopUrl)}" target="_blank" rel="noopener">${esc(shop)}</a>
-            <div class="detail-shop-rating">★ ${shopRat.toFixed(1)} · ${shopRevs.toLocaleString()} ${shopRevs === 1 ? 'review' : 'reviews'}</div>
+            <div class="detail-shop-rating">${shopRat !== null ? '★ ' + shopRat.toFixed(1) : '★ —'} · ${shopRevs !== null ? shopRevs.toLocaleString() + (shopRevs === 1 ? ' review' : ' reviews') : 'shop data pending'}</div>
             ${shopDetailParts.length > 0 ? `<div class="shop-details">${shopDetailParts.join('')}</div>` : ''}
           </div>
         </div>`;
       }).join('');
 
-      detailHtml = `<div class="detail-listings">${listingCards}</div>`;
+      detailHtml = `<div class="detail-listings">${listingCards}</div><div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:12px;text-align:center;">* Shop review counts populate after listing audit step</div>`;
     } else {
       detailHtml = `<div class="detail-empty">No listings audited for this keyword (Step 2 captured nothing).</div>`;
     }
@@ -1595,7 +1594,7 @@ footer { color: var(--muted); text-align: center; margin-top: 40px; font-size: 1
   <div class="metric-card"><h3>Shops</h3><p>${niche.total_shops}</p></div>
   <div class="metric-card"><h3>Median Price</h3><p>$${niche.avg_price}</p></div>
   <div class="metric-card"><h3>Avg Searches</h3><p>${niche.avg_searches}</p></div>
-  <div class="metric-card"><h3>Avg Comp</h3><p>${niche.avg_competition}</p></div>
+  <div class="metric-card"><h3>Avg Comp</h3><p>${niche.avg_competition === null ? '<span class="muted" title="eRank data required for competition score">—</span>' : niche.avg_competition}</p></div>
   <!-- 2026-04-17: "Weak Listings %" metric removed. It depended on erank_score,
        which Step 3 stopped collecting when it went Etsy-only. The tile was
        never rendering in practice (has_audits was always false post-migration). -->
@@ -1620,7 +1619,7 @@ ${demandBannerHtml}
 </div>
 
 <footer>
-  Niche Moat Report — Generated using <a href="https://nichemoat.com" target="_blank" rel="noopener">Niche Moat</a>, a product of <a href="https://emporiumedge.com" target="_blank" rel="noopener">Emporium Edge LLC</a>, on ${reportDate}
+  Etsy Research Pro Report — Generated using Etsy Research Pro, a free and open-source tool, on ${reportDate}
 </footer>
 
 <script>

@@ -8,16 +8,22 @@
     try {
       const storageRes = await chrome.storage.local.get('config');
       const config = storageRes.config || {};
+      if (!config.share_telemetry) return;
       const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
       const reportUrl = `${baseUrl}/api/telemetry/report`;
 
+      let cleanUrl = 'erank-keyword';
+      try {
+        const u = new URL(window.location.href);
+        cleanUrl = u.origin + u.pathname;
+      } catch (e) {}
+
       const errorState = {
         error_message: err.message || String(err),
-        stack_trace: err.stack || '',
-        url: window.location.href,
-        user_agent: navigator.userAgent,
-        time: new Date().toISOString(),
-        ...context
+        stack_trace: 'Location: erank-keyword-extractor.js',
+        url: cleanUrl,
+        user_agent: 'Etsy Research Pro Extension',
+        time: new Date().toISOString()
       };
 
       await fetch(reportUrl, {
@@ -31,6 +37,11 @@
   }
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    // Attempt to load live selectors on first message
+    if (typeof window.loadLiveSelectors === 'function') {
+      window.loadLiveSelectors();
+    }
+
     if (msg.action === 'checkErankLogin') {
       handleCheckLogin(sendResponse);
       return true;
@@ -63,8 +74,8 @@
 
   function handleCheckLogin(sendResponse) {
     // Check for login form vs keyword tool interface
-    const loginForm = document.querySelector('form[action*="login"], input[name="email"], .login-form, #login-form');
-    const keywordTool = document.querySelector('.keyword-tool, #keyword-tool, .search-bar, input[name="keyword"], [class*="KeywordTool"]');
+    const loginForm = safeQuery(document, 'erankKeyword.loginForm', false);
+    const keywordTool = safeQuery(document, 'erankKeyword.keywordTool', false);
 
     // Also check page text for common indicators
     const bodyText = document.body.innerText.toLowerCase();
@@ -100,7 +111,7 @@
       if (clickMatch) data.mainMetrics.click_rate = parseFloat(clickMatch[1]);
 
       // Try to extract from specific DOM elements (cards, stats sections)
-      const statCards = document.querySelectorAll('.stat-card, .metric-card, .summary-card, [class*="stat"], [class*="metric"]');
+      const statCards = safeQueryAll(document, 'erankKeyword.statCards');
       statCards.forEach(card => {
         const text = card.innerText;
         if (text.match(/avg.*search/i) && !data.mainMetrics.avg_searches) {
@@ -114,7 +125,7 @@
       });
 
       // Extract country data from charts or tables
-      const countryRows = document.querySelectorAll('[class*="country"], [class*="Country"]');
+      const countryRows = safeQueryAll(document, 'erankKeyword.countryRows');
       countryRows.forEach(row => {
         const text = row.innerText.trim();
         const parts = text.split(/\s+/);
@@ -128,7 +139,7 @@
       });
 
       // Also try to get country data from SVG chart labels
-      const chartLabels = document.querySelectorAll('svg text, .chart-label, [class*="chart"] text');
+      const chartLabels = safeQueryAll(document, 'erankKeyword.chartLabels');
       chartLabels.forEach(label => {
         const text = label.textContent.trim();
         if (text.length > 1 && text.length < 30) {
@@ -187,16 +198,16 @@
     function poll() {
       try {
         pollCount++;
-        const tables = document.querySelectorAll('table');
+        const tables = safeQueryAll(document, 'erankKeyword.tables');
         let bestRowCount = 0;
         let bestTableInfo = '';
         let matchedTables = 0;
 
         for (const table of tables) {
-          const headerText = (table.querySelector('thead tr:first-child')?.innerText || '').toLowerCase();
+          const headerText = (safeQuery(table, 'erankKeyword.headerRow', false)?.innerText || '').toLowerCase();
           if (!headerText.includes('keyword')) continue;
           matchedTables++;
-          const bodyRows = table.querySelectorAll('tbody tr');
+          const bodyRows = safeQueryAll(table, 'erankKeyword.bodyRows');
           const visibleRows = Array.from(bodyRows).filter(r => r.offsetParent !== null || r.offsetHeight > 0);
           if (visibleRows.length > bestRowCount) {
             bestRowCount = visibleRows.length;
@@ -404,12 +415,12 @@
       // DataTables often creates duplicate/shadow tables, so we pick the one with the MOST tbody rows.
       // TABLE 0 & TABLE 1 are typically duplicates; TABLE 2 is a smaller section.
 
-      const tables = document.querySelectorAll('table');
+      const tables = safeQueryAll(document, 'erankKeyword.tables');
       let targetTable = null;
       let bestScore = 0;
 
       for (const table of tables) {
-        const headerRow = table.querySelector('thead tr:first-child, tr:first-child');
+        const headerRow = safeQuery(table, 'erankKeyword.headerRow', false);
         if (!headerRow) continue;
         const headerText = headerRow.innerText.toLowerCase();
 
@@ -425,12 +436,12 @@
         // Should have clicks column
         if (headerText.includes('click')) score += 1;
         // Prefer tables with more data rows (the real table, not a clone with 0 visible rows)
-        const bodyRows = table.querySelectorAll('tbody tr');
+        const bodyRows = safeQueryAll(table, 'erankKeyword.bodyRows');
         const visibleRows = Array.from(bodyRows).filter(r => r.offsetParent !== null || r.offsetHeight > 0);
         // Use visible row count as a tiebreaker — more visible rows = more likely the real table
         score += Math.min(visibleRows.length, 5);
         // Multiple header cells = data table
-        const headerCells = headerRow.querySelectorAll('th, td');
+        const headerCells = safeQueryAll(headerRow, 'erankKeyword.cells');
         if (headerCells.length >= 6) score += 2;
 
         if (score > bestScore) {
@@ -440,14 +451,14 @@
       }
 
       if (!targetTable) {
-        targetTable = document.querySelector('[class*="keyword-table"], [class*="suggestions"], .table, [class*="DataTable"]');
+        targetTable = safeQuery(document, 'erankKeyword.keywordTableFallback', false);
       }
 
       console.log(`[eRank Extractor] Best table score: ${bestScore}, found: ${!!targetTable}`);
 
       if (targetTable) {
-        const rows = targetTable.querySelectorAll('tbody tr');
-        const headerRow = targetTable.querySelector('thead tr:first-child');
+        const rows = safeQueryAll(targetTable, 'erankKeyword.bodyRows');
+        const headerRow = safeQuery(targetTable, 'erankKeyword.headerRow', false);
 
         // Build column map from actual header text. Strategy:
         //   1) Exact-match on canonical eRank header strings (most reliable
@@ -463,7 +474,7 @@
         let colMap = {};
         let rawHeaders = [];
         if (headerRow) {
-          rawHeaders = Array.from(headerRow.querySelectorAll('th, td'))
+          rawHeaders = Array.from(safeQueryAll(headerRow, 'erankKeyword.cells'))
             .map(h => (h.innerText || '').trim());
           const headers = rawHeaders.map(h => h
             .toLowerCase()
@@ -546,7 +557,7 @@
           // Skip hidden rows (DataTables clone rows)
           if (row.offsetParent === null && row.offsetHeight === 0) return;
 
-          const cells = Array.from(row.querySelectorAll('td'));
+          const cells = Array.from(safeQueryAll(row, 'erankKeyword.cells'));
           if (cells.length < 3) return;
 
           const suggestion = {};
@@ -557,12 +568,12 @@
           if (colMap.keyword !== undefined) {
             const kwCell = cells[colMap.keyword];
             // Priority 1: look for a link (eRank keywords are often clickable links)
-            const link = kwCell?.querySelector('a');
+            const link = safeQuery(kwCell, 'erankKeyword.keywordLink', false);
             if (link) {
               suggestion.keyword = link.innerText.trim();
             } else {
               // Priority 2: look for bold/strong/span with the keyword text
-              const bold = kwCell?.querySelector('b, strong, span[class*="keyword"], span[class*="Keyword"]');
+              const bold = safeQuery(kwCell, 'erankKeyword.keywordBold', false);
               if (bold) {
                 suggestion.keyword = bold.innerText.trim();
               } else {

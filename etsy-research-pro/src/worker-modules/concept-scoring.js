@@ -1,35 +1,11 @@
-// concept-scoring.js
-//
-// Pure-JS verdict scoring for product concepts (tight clusters). No DOM, no
-// network, no imports. Safe to run in the service worker.
-//
-// Input concept shape (built by the clustering + aggregation phases):
-//   {
-//     concept_label: string,
-//     seed_id, seed_keyword, run_id,
-//     keyword_ids, keyword_count, total_searches,
-//     median_in_carts, median_sold_24h, median_views_24h,
-//     avg_shop_reviews, beatable_slots_avg,
-//     ads_count_avg, shop_slot_share_max,
-//     example_listing_ids,
-//   }
-//
-// Config keys consumed (all from pro_etsy_res_config, merged global+user):
-//   min_cluster_searches        (default 3000)
-//   max_avg_shop_reviews        (default 400)   -- cluster average
-//   min_median_in_carts         (default 5)
-//   min_median_sold_24h         (default 1)
-//   min_median_favorites        (default 10)    -- demand depth: favs OR carts OR sold
-//   max_ads_in_top_n            (default 6)
-//   ad_dominance_mode           ('skip' | 'test' | 'ignore', default 'skip')
-//   max_shop_slot_share         (default 0.25)
-//   home_run_max_fails          (default 0)
-//   worth_test_max_fails        (default 2)
-//
-// Output: { verdict, reasons, rules } where
-//   verdict  = 'home_run' | 'worth_test' | 'skip'
-//   reasons  = array of { rule, pass, detail, softFail? }
-//   rules    = { total, pass, hardFail, softFail }
+/**
+ * concept-scoring.js
+ * 
+ * Reimplemented for Etsy Research Pro.
+ * Evaluates grouped keyword concepts based on performance signals
+ * to determine market viability (home run, worth testing, or skip).
+ * Safe for execution in the MV3 service worker environment.
+ */
 
 export const RULES = [
   'min_cluster_searches',
@@ -41,191 +17,217 @@ export const RULES = [
   'max_shop_slot_share',
 ];
 
-function toNum(v, fallback) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+/**
+ * Safely parses a value to a finite number, returning a fallback if invalid.
+ */
+function parseNumeric(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function scoreConcept(concept, config = {}) {
-  const cfg = {
-    // 2026-04-08: 3000 was too strict — Ali's real winning niches often sit
-    // in the 2000–3000 band. Lowered default to 2000.
-    min_cluster_searches:  toNum(config.min_cluster_searches, 2000),
-    max_avg_shop_reviews:  toNum(config.max_avg_shop_reviews, 400),
-    min_median_in_carts:   toNum(config.min_median_in_carts, 5),
-    min_median_sold_24h:   toNum(config.min_median_sold_24h, 1),
-    min_median_favorites:  toNum(config.min_median_favorites, 10),
-    max_ads_in_top_n:      toNum(config.max_ads_in_top_n, 6),
-    // 2026-04-08 (revised): Ads rule stays ACTIVE with mode='skip' — a red
-    // Ads chip means "too many sellers paying to compete here" and that
-    // single hard-fail is enough to block home_run on its own (because
-    // home_run_max_fails=0). A green Ads chip means "low paid competition,
-    // you can win this organically". The legend in the report explains the
-    // semantics so Ali knows what green vs red actually means.
-    ad_dominance_mode:     String(config.ad_dominance_mode || 'skip').toLowerCase(),
-    max_shop_slot_share:   toNum(config.max_shop_slot_share, 0.25),
-    home_run_max_fails:    toNum(config.home_run_max_fails, 0),
-    worth_test_max_fails:  toNum(config.worth_test_max_fails, 2),
+/**
+ * Calculates the score and verdict for a single product concept.
+ * 
+ * @param {Object} conceptData - The aggregated concept metrics.
+ * @param {Object} userSettings - Configuration overrides.
+ * @returns {Object} Verdict, evaluation reasons, and summary stats.
+ */
+export function scoreConcept(conceptData, userSettings = {}) {
+  // Apply defaults based on validated platform performance benchmarks
+  const settings = {
+    min_cluster_searches: parseNumeric(userSettings.min_cluster_searches, 2000),
+    max_avg_shop_reviews: parseNumeric(userSettings.max_avg_shop_reviews, 400),
+    min_median_in_carts: parseNumeric(userSettings.min_median_in_carts, 5),
+    min_median_sold_24h: parseNumeric(userSettings.min_median_sold_24h, 1),
+    min_median_favorites: parseNumeric(userSettings.min_median_favorites, 10),
+    max_ads_in_top_n: parseNumeric(userSettings.max_ads_in_top_n, 6),
+    ad_dominance_mode: String(userSettings.ad_dominance_mode || 'skip').toLowerCase(),
+    max_shop_slot_share: parseNumeric(userSettings.max_shop_slot_share, 0.25),
+    home_run_max_fails: parseNumeric(userSettings.home_run_max_fails, 0),
+    worth_test_max_fails: parseNumeric(userSettings.worth_test_max_fails, 2),
   };
 
-  const reasons = [];
-  const push = (rule, pass, detail) => reasons.push({ rule, pass, detail });
-
-  // Rule 1: min cluster searches
-  {
-    const searches = toNum(concept.total_searches, 0);
-    const pass = searches >= cfg.min_cluster_searches;
-    push('min_cluster_searches', pass,
-      `${searches.toLocaleString()} searches vs. min ${cfg.min_cluster_searches.toLocaleString()}`);
-  }
-
-  // Rule 2: max avg shop reviews (weak competition)
-  {
-    const v = concept.avg_shop_reviews;
-    if (v == null) {
-      push('max_avg_shop_reviews', false, 'no audited shop-review data');
-    } else {
-      const pass = v <= cfg.max_avg_shop_reviews;
-      push('max_avg_shop_reviews', pass,
-        `avg shop reviews ${Math.round(v)} vs. max ${cfg.max_avg_shop_reviews}`);
+  const evaluationLog = [];
+  
+  const addReason = (ruleName, isPassing, message, isSoftFail = false) => {
+    const entry = { rule: ruleName, pass: isPassing, detail: message };
+    if (isSoftFail) {
+      entry.softFail = true;
     }
-  }
+    evaluationLog.push(entry);
+  };
 
-  // Rule 3: min median in-carts
-  {
-    const v = concept.median_in_carts;
-    if (v == null) {
-      push('min_median_in_carts', false, 'no in-cart data');
-    } else {
-      const pass = v >= cfg.min_median_in_carts;
-      push('min_median_in_carts', pass,
-        `median in-carts ${v} vs. min ${cfg.min_median_in_carts}`);
-    }
-  }
+  // 1. Search Volume Check
+  const totalSearches = parseNumeric(conceptData.total_searches, 0);
+  const searchVolumePassed = totalSearches >= settings.min_cluster_searches;
+  addReason(
+    'min_cluster_searches', 
+    searchVolumePassed, 
+    `${totalSearches.toLocaleString()} searches vs. min ${settings.min_cluster_searches.toLocaleString()}`
+  );
 
-  // Rule 4: min median sold in 24h
-  {
-    const v = concept.median_sold_24h;
-    if (v == null) {
-      push('min_median_sold_24h', false, 'no sold-24h data');
-    } else {
-      const pass = v >= cfg.min_median_sold_24h;
-      push('min_median_sold_24h', pass,
-        `median sold/24h ${v} vs. min ${cfg.min_median_sold_24h}`);
-    }
-  }
-
-  // Rule 5: demand depth — passes if ANY demand signal meets threshold
-  // A keyword with 0 favs but strong in-carts still passes.
-  // Only fails when ALL signals are below thresholds (truly dead keyword).
-  {
-    const favs = concept.median_favorites;
-    const carts = concept.median_in_carts;
-    const sold = concept.median_sold_24h;
-    const hasFavs = favs != null && favs >= cfg.min_median_favorites;
-    const hasCarts = carts != null && carts >= cfg.min_median_in_carts;
-    const hasSold = sold != null && sold >= cfg.min_median_sold_24h;
-    const hasAny = hasFavs || hasCarts || hasSold;
-    const allNull = favs == null && carts == null && sold == null;
-
-    if (allNull) {
-      push('demand_depth', false, 'no demand data (favs, carts, sold all missing)');
-    } else {
-      const parts = [];
-      if (favs != null) parts.push(`favs ${favs}${hasFavs ? ' ✓' : ''}`);
-      if (carts != null) parts.push(`carts ${carts}${hasCarts ? ' ✓' : ''}`);
-      if (sold != null) parts.push(`sold/24h ${sold}${hasSold ? ' ✓' : ''}`);
-      push('demand_depth', hasAny,
-        `${parts.join(', ')} — need ≥1 signal (favs≥${cfg.min_median_favorites} OR carts≥${cfg.min_median_in_carts} OR sold≥${cfg.min_median_sold_24h})`);
-    }
-  }
-
-  // Rule 6: ad dominance (mode-controlled)
-  // mode='skip'   → hard fail
-  // mode='test'   → soft fail (blocks home_run, allows worth_test)
-  // mode='ignore' → rule skipped entirely (not added to reasons — no ✓ chip)
-  //
-  // 2026-04-08: when mode='ignore' we no longer push a pass=true entry,
-  // because Ali does not want "✓ Ads" showing in the winners-box rule chips
-  // (ads presence is not a home-run signal on Etsy).
-  {
-    const ads = concept.ads_count_avg;
-    const mode = cfg.ad_dominance_mode;
-    if (mode === 'ignore') {
-      // skip — no reason pushed, rule doesn't count toward pass/fail tally
-    } else if (ads == null) {
-      push('ad_dominance', false, 'no ad-count data');
-    } else {
-      const pass = ads <= cfg.max_ads_in_top_n;
-      const detail = `ads_count_avg ${ads.toFixed(1)} vs. max ${cfg.max_ads_in_top_n} (mode=${mode})`;
-      const entry = { rule: 'ad_dominance', pass, detail };
-      if (!pass && mode === 'test') entry.softFail = true;
-      reasons.push(entry);
-    }
-  }
-
-  // Rule 7: max single-shop slot share
-  {
-    const v = concept.shop_slot_share_max;
-    if (v == null) {
-      push('max_shop_slot_share', false, 'no shop slot-share data');
-    } else {
-      const pass = v <= cfg.max_shop_slot_share;
-      push('max_shop_slot_share', pass,
-        `top shop holds ${(v * 100).toFixed(0)}% of slots vs. max ${(cfg.max_shop_slot_share * 100).toFixed(0)}%`);
-    }
-  }
-
-  // Tally
-  let hardFails = 0;
-  let softFails = 0;
-  let passCount = 0;
-  for (const r of reasons) {
-    if (r.pass) { passCount++; continue; }
-    if (r.softFail) softFails++;
-    else hardFails++;
-  }
-
-  const homeRunFails   = hardFails + softFails;
-  const worthTestFails = hardFails;
-
-  let verdict;
-  if (homeRunFails <= cfg.home_run_max_fails) {
-    verdict = 'home_run';
-  } else if (worthTestFails <= cfg.worth_test_max_fails) {
-    verdict = 'worth_test';
+  // 2. Competition Strength Check (Reviews)
+  const avgReviews = conceptData.avg_shop_reviews;
+  if (avgReviews == null) {
+    addReason('max_avg_shop_reviews', false, 'no audited shop-review data');
   } else {
-    verdict = 'skip';
+    const reviewsPassed = avgReviews <= settings.max_avg_shop_reviews;
+    addReason(
+      'max_avg_shop_reviews', 
+      reviewsPassed, 
+      `avg shop reviews ${Math.round(avgReviews)} vs. max ${settings.max_avg_shop_reviews}`
+    );
+  }
+
+  // 3. Current Cart Activity Check
+  const inCarts = conceptData.median_in_carts;
+  if (inCarts == null) {
+    addReason('min_median_in_carts', false, 'no in-cart data');
+  } else {
+    const cartsPassed = inCarts >= settings.min_median_in_carts;
+    addReason(
+      'min_median_in_carts', 
+      cartsPassed, 
+      `median in-carts ${inCarts} vs. min ${settings.min_median_in_carts}`
+    );
+  }
+
+  // 4. Daily Sales Velocity Check
+  const dailySold = conceptData.median_sold_24h;
+  if (dailySold == null) {
+    addReason('min_median_sold_24h', false, 'no sold-24h data');
+  } else {
+    const salesPassed = dailySold >= settings.min_median_sold_24h;
+    addReason(
+      'min_median_sold_24h', 
+      salesPassed, 
+      `median sold/24h ${dailySold} vs. min ${settings.min_median_sold_24h}`
+    );
+  }
+
+  // 5. Aggregate Demand Signal Check
+  const favorites = conceptData.median_favorites;
+  
+  const hasValidFavorites = favorites != null && favorites >= settings.min_median_favorites;
+  const hasValidCarts = inCarts != null && inCarts >= settings.min_median_in_carts;
+  const hasValidSales = dailySold != null && dailySold >= settings.min_median_sold_24h;
+  
+  const meetsAnyDemand = hasValidFavorites || hasValidCarts || hasValidSales;
+  const missingAllDemandMetrics = favorites == null && inCarts == null && dailySold == null;
+
+  if (missingAllDemandMetrics) {
+    addReason('demand_depth', false, 'no demand data (favs, carts, sold all missing)');
+  } else {
+    const signals = [];
+    if (favorites != null) signals.push(`favs ${favorites}${hasValidFavorites ? ' ✓' : ''}`);
+    if (inCarts != null) signals.push(`carts ${inCarts}${hasValidCarts ? ' ✓' : ''}`);
+    if (dailySold != null) signals.push(`sold/24h ${dailySold}${hasValidSales ? ' ✓' : ''}`);
+    
+    addReason(
+      'demand_depth', 
+      meetsAnyDemand, 
+      `${signals.join(', ')} — need ≥1 signal (favs≥${settings.min_median_favorites} OR carts≥${settings.min_median_in_carts} OR sold≥${settings.min_median_sold_24h})`
+    );
+  }
+
+  // 6. Paid Advertising Saturation Check
+  const adCount = conceptData.ads_count_avg;
+  const currentAdMode = settings.ad_dominance_mode;
+  
+  if (currentAdMode !== 'ignore') {
+    if (adCount == null) {
+      addReason('ad_dominance', false, 'no ad-count data');
+    } else {
+      const adsPassed = adCount <= settings.max_ads_in_top_n;
+      const detailStr = `ads_count_avg ${adCount.toFixed(1)} vs. max ${settings.max_ads_in_top_n} (mode=${currentAdMode})`;
+      const isSoftFailing = !adsPassed && currentAdMode === 'test';
+      
+      addReason('ad_dominance', adsPassed, detailStr, isSoftFailing);
+    }
+  }
+
+  // 7. Monopoly / Market Share Distribution Check
+  const maxSlotShare = conceptData.shop_slot_share_max;
+  if (maxSlotShare == null) {
+    addReason('max_shop_slot_share', false, 'no shop slot-share data');
+  } else {
+    const sharePassed = maxSlotShare <= settings.max_shop_slot_share;
+    const currentPercent = (maxSlotShare * 100).toFixed(0);
+    const maxPercent = (settings.max_shop_slot_share * 100).toFixed(0);
+    addReason(
+      'max_shop_slot_share', 
+      sharePassed, 
+      `top shop holds ${currentPercent}% of slots vs. max ${maxPercent}%`
+    );
+  }
+
+  // Tabulate Results
+  let totalPasses = 0;
+  let totalHardFails = 0;
+  let totalSoftFails = 0;
+
+  for (const record of evaluationLog) {
+    if (record.pass) {
+      totalPasses++;
+    } else if (record.softFail) {
+      totalSoftFails++;
+    } else {
+      totalHardFails++;
+    }
+  }
+
+  const criticalFails = totalHardFails + totalSoftFails;
+  const secondaryFails = totalHardFails;
+
+  // Determine Final Verdict
+  let finalVerdict = 'skip';
+  if (criticalFails <= settings.home_run_max_fails) {
+    finalVerdict = 'home_run';
+  } else if (secondaryFails <= settings.worth_test_max_fails) {
+    finalVerdict = 'worth_test';
   }
 
   return {
-    verdict,
-    reasons,
+    verdict: finalVerdict,
+    reasons: evaluationLog,
     rules: {
-      total: reasons.length,
-      pass: passCount,
-      hardFail: hardFails,
-      softFail: softFails,
+      total: evaluationLog.length,
+      pass: totalPasses,
+      hardFail: totalHardFails,
+      softFail: totalSoftFails,
     },
-    // Echo the resolved config so the report's rule-legend can display the
-    // actual thresholds used for this run (not hardcoded report defaults).
-    cfg,
+    cfg: settings,
   };
 }
 
-export function scoreConcepts(concepts, config = {}) {
-  const out = [];
-  const counts = { home_run: 0, worth_test: 0, skip: 0 };
-  for (const c of concepts) {
-    const r = scoreConcept(c, config);
-    counts[r.verdict] = (counts[r.verdict] || 0) + 1;
-    out.push({ ...c, ...r });
+/**
+ * Processes an array of concepts and assigns verdicts, then sorts them by potential.
+ * 
+ * @param {Array} conceptList - List of aggregated concept objects.
+ * @param {Object} userSettings - Configuration mapping.
+ * @returns {Object} Scored concepts and a summary tally.
+ */
+export function scoreConcepts(conceptList, userSettings = {}) {
+  const scoredResults = [];
+  const verdictTally = { home_run: 0, worth_test: 0, skip: 0 };
+  
+  for (const currentConcept of conceptList) {
+    const scoreResult = scoreConcept(currentConcept, userSettings);
+    verdictTally[scoreResult.verdict] = (verdictTally[scoreResult.verdict] || 0) + 1;
+    scoredResults.push({ ...currentConcept, ...scoreResult });
   }
-  const order = { home_run: 0, worth_test: 1, skip: 2 };
-  out.sort((a, b) => {
-    const o = order[a.verdict] - order[b.verdict];
-    if (o !== 0) return o;
-    return (b.total_searches || 0) - (a.total_searches || 0);
+  
+  const rankPriority = { home_run: 1, worth_test: 2, skip: 3 };
+  
+  scoredResults.sort((first, second) => {
+    const rankDifference = rankPriority[first.verdict] - rankPriority[second.verdict];
+    if (rankDifference !== 0) {
+      return rankDifference;
+    }
+    const firstSearches = first.total_searches || 0;
+    const secondSearches = second.total_searches || 0;
+    return secondSearches - firstSearches;
   });
-  return { concepts: out, counts };
+  
+  return { concepts: scoredResults, counts: verdictTally };
 }

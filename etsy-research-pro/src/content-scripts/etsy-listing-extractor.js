@@ -8,16 +8,22 @@
     try {
       const storageRes = await chrome.storage.local.get('config');
       const config = storageRes.config || {};
+      if (!config.share_telemetry) return;
       const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
       const reportUrl = `${baseUrl}/api/telemetry/report`;
 
+      let cleanUrl = 'etsy-listing';
+      try {
+        const u = new URL(window.location.href);
+        cleanUrl = u.origin + u.pathname;
+      } catch (e) {}
+
       const errorState = {
         error_message: err.message || String(err),
-        stack_trace: err.stack || '',
-        url: window.location.href,
-        user_agent: navigator.userAgent,
-        time: new Date().toISOString(),
-        ...context
+        stack_trace: 'Location: etsy-listing-extractor.js',
+        url: cleanUrl,
+        user_agent: 'Etsy Research Pro Extension',
+        time: new Date().toISOString()
       };
 
       await fetch(reportUrl, {
@@ -33,7 +39,12 @@
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'extractEtsyListingDetail') {
       console.log("Scraper: Attempting to audit " + (msg.keyword || "unknown"));
-      handleExtractDetail(sendResponse);
+      (async () => {
+        if (typeof window.loadLiveSelectors === 'function') {
+          await window.loadLiveSelectors();
+        }
+        handleExtractDetail(sendResponse);
+      })();
       return true;
     }
   });
@@ -49,7 +60,7 @@
       let rating = null, reviewCount = null;
 
       // Method 1: JSON-LD structured data (most reliable)
-      const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+      const ldScripts = safeQueryAll(document, 'etsyListing.ldJson');
       for (const script of ldScripts) {
         try {
           const ld = JSON.parse(script.textContent);
@@ -63,15 +74,15 @@
 
       // Method 2: Meta tags
       if (!rating) {
-        const ratingMeta = document.querySelector('meta[itemprop="ratingValue"], meta[property="og:rating"]');
+        const ratingMeta = safeQuery(document, 'etsyListing.ratingMeta', false);
         if (ratingMeta) rating = parseFloat(ratingMeta.getAttribute('content'));
-        const countMeta = document.querySelector('meta[itemprop="reviewCount"], meta[itemprop="ratingCount"]');
+        const countMeta = safeQuery(document, 'etsyListing.countMeta', false);
         if (countMeta) reviewCount = parseInt(countMeta.getAttribute('content'));
       }
 
       // Method 3: DOM elements — look for star rating display
       if (!rating) {
-        const ratingEls = document.querySelectorAll('[data-rating], [class*="stars-svg"] [class*="screen-reader"], [aria-label*="star"], [class*="review"] [class*="rating"]');
+        const ratingEls = safeQueryAll(document, 'etsyListing.ratingEls');
         for (const el of ratingEls) {
           const ariaLabel = el.getAttribute('aria-label') || '';
           const dataRating = el.getAttribute('data-rating');
@@ -108,14 +119,7 @@
       data.urgency_text = '';
 
       // Method 1: DOM — find the UrgencySignal component (most reliable)
-      const urgencySelectors = [
-        '[data-appears-component-name*="UrgencySignal"]',
-        '[data-appears-component-name*="urgency"]',
-        '[data-appears-component-name*="Urgency"]',
-      ];
-      for (const sel of urgencySelectors) {
-        try {
-          const el = document.querySelector(sel);
+          const el = safeQuery(document, 'etsyListing.urgencySelectors', false);
           if (el) {
             const text = el.textContent.trim();
             if (text.length > 2 && text.length < 200) {
@@ -128,7 +132,7 @@
 
       // Method 2: Look for wt-sem-text-critical paragraphs near price (Etsy's urgency styling)
       if (!data.urgency_text) {
-        const criticalEls = document.querySelectorAll('p.wt-sem-text-critical, div.wt-sem-text-critical, span.wt-sem-text-critical');
+        const criticalEls = safeQueryAll(document, 'etsyListing.criticalEls');
         for (const el of criticalEls) {
           const text = el.textContent.trim();
           // Filter to actual urgency signals (not prices or other critical text)
@@ -175,19 +179,19 @@
       data.views_24h = viewsMatch ? parseInt(viewsMatch[1]) : null;
 
       // Thumbnail URL (og:image meta tag)
-      const ogImage = document.querySelector('meta[property="og:image"]');
+      const ogImage = safeQuery(document, 'etsyListing.ogImage', false);
       data.etsy_thumbnail_url = ogImage ? ogImage.getAttribute('content') : '';
 
       // Also try to get the main listing image
       if (!data.etsy_thumbnail_url) {
-        const mainImg = document.querySelector('[class*="listing-image"] img, [data-listing-image] img, .image-carousel img');
+        const mainImg = safeQuery(document, 'etsyListing.mainImg', false);
         data.etsy_thumbnail_url = mainImg ? mainImg.src : '';
       }
 
       // ─── Favorites / Hearts count ───
       // Source 1: meta description — "has X favourites/favorites from Etsy shoppers"
       data.favorites_count = null;
-      const metaDesc = document.querySelector('meta[name="description"]');
+      const metaDesc = safeQuery(document, 'etsyListing.metaDesc', false);
       if (metaDesc) {
         const descContent = metaDesc.getAttribute('content') || '';
         const favMetaMatch = descContent.match(/has\s+([\d,]+)\s+favou?rites?\s+from/i);
@@ -195,7 +199,7 @@
       }
       // Source 2: og:description (same pattern)
       if (!data.favorites_count) {
-        const ogDesc = document.querySelector('meta[property="og:description"]');
+        const ogDesc = safeQuery(document, 'etsyListing.ogDesc', false);
         if (ogDesc) {
           const ogContent = ogDesc.getAttribute('content') || '';
           const favOgMatch = ogContent.match(/has\s+([\d,]+)\s+favou?rites?\s+from/i);
@@ -210,11 +214,11 @@
 
       // ─── Photo count ───
       // Count carousel panes with data-image-id (excludes video panes)
-      const imageIds = document.querySelectorAll('[data-carousel-pane][data-image-id]');
+      const imageIds = safeQueryAll(document, 'etsyListing.imageIds');
       data.photo_count = imageIds.length;
       // Fallback: JSON-LD Product image array
       if (data.photo_count === 0) {
-        for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+        for (const script of safeQueryAll(document, 'etsyListing.ldJson')) {
           try {
             const ld = JSON.parse(script.textContent);
             const product = ld['@type'] === 'Product' ? ld : null;
@@ -227,10 +231,10 @@
       }
 
       // ─── Has video ───
-      data.has_video = !!document.querySelector('video[id^="listing-video"], [data-video-pane]');
+      data.has_video = !!safeQuery(document, 'etsyListing.videoPane', false);
       // Fallback: JSON-LD VideoObject
       if (!data.has_video) {
-        for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+        for (const script of safeQueryAll(document, 'etsyListing.ldJson')) {
           try {
             const ld = JSON.parse(script.textContent);
             if (ld['@type'] === 'VideoObject') { data.has_video = true; break; }
@@ -241,7 +245,7 @@
       // ─── Related search queries (Etsy's own suggestions) ───
       data.related_search_queries = [];
       try {
-        const tagsContainer = document.querySelector('[data-appears-component-name="Listzilla_ApiSpecs_Tags_MultiChannelLanding"]');
+        const tagsContainer = safeQuery(document, 'etsyListing.tagsContainer', false);
         if (tagsContainer) {
           const eventData = tagsContainer.getAttribute('data-appears-event-data');
           if (eventData) {
@@ -397,8 +401,11 @@
 
       sendResponse({ success: true, data });
     } catch (err) {
-      console.error('[Etsy Listing Extractor] Failure:', err);
-      sendTelemetryReport(err, { component: 'etsy-listing-extractor' });
+      if (typeof catchError === 'function') {
+        catchError(err, 'etsy-listing-extractor');
+      } else {
+        console.error('[Etsy Listing Extractor] Failure:', err);
+      }
       sendResponse({ success: false, error: err.message, data: {} });
     }
   }

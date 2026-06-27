@@ -163,8 +163,8 @@ export async function runErankListingAudit(sheetsClient, tabId, config, log, see
       bucket.sort((a, b) => {
         const aShop = shopLookup[(a.shop_name || '').toLowerCase()] || {};
         const bShop = shopLookup[(b.shop_name || '').toLowerCase()] || {};
-        const aRevs = parseInt(aShop.shop_review_count) || 1e9;
-        const bRevs = parseInt(bShop.shop_review_count) || 1e9;
+        const aRevs = (aShop.shop_review_count != null && !isNaN(parseInt(aShop.shop_review_count))) ? parseInt(aShop.shop_review_count) : 0;
+        const bRevs = (bShop.shop_review_count != null && !isNaN(parseInt(bShop.shop_review_count))) ? parseInt(bShop.shop_review_count) : 0;
         const aBeatable = aRevs < maxShopReviewsBeatable ? 1 : 0;
         const bBeatable = bRevs < maxShopReviewsBeatable ? 1 : 0;
         if (aBeatable !== bBeatable) return bBeatable - aBeatable;

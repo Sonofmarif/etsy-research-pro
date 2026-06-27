@@ -27,6 +27,7 @@
       inputMinBeatableSlots: $('input-min-beatable-slots'),
       inputMinQualifiedKeywords: $('input-min-qualified-keywords'),
       inputWebhookUrl: $('input-webhook-url'),
+      inputShareTelemetry: $('input-share-telemetry'),
       btnSaveSettings: $('btn-save-settings'),
       settingsSaved: $('settings-saved'),
 
@@ -108,7 +109,7 @@
         dom.inputMinBeatableSlots.value = config.min_beatable_slots !== undefined ? config.min_beatable_slots : 3;
         dom.inputMinQualifiedKeywords.value = config.min_qualified_keywords !== undefined ? config.min_qualified_keywords : 5;
         dom.inputWebhookUrl.value = config.webhook_url || '';
-
+        dom.inputShareTelemetry.checked = config.share_telemetry !== undefined ? config.share_telemetry : false;
         resolve();
       });
     });
@@ -128,6 +129,7 @@
         const minSlots = parseInt(dom.inputMinBeatableSlots.value);
         const minQualified = parseInt(dom.inputMinQualifiedKeywords.value);
         const webhookUrl = dom.inputWebhookUrl.value.trim();
+        const shareTelemetry = dom.inputShareTelemetry.checked;
 
         config.gemini_api_key = geminiKey;
         config.min_monthly_searches = isNaN(minSearches) ? 500 : minSearches;
@@ -137,6 +139,7 @@
         config.min_beatable_slots = isNaN(minSlots) ? 3 : minSlots;
         config.min_qualified_keywords = isNaN(minQualified) ? 5 : minQualified;
         config.webhook_url = webhookUrl;
+        config.share_telemetry = shareTelemetry;
 
         if (geminiKey) {
           config.ai_provider = 'gemini';

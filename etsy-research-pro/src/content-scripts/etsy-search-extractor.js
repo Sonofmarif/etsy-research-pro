@@ -12,7 +12,13 @@
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'extractEtsySearchResults') {
-      handleExtractSearchResults(sendResponse);
+      // Load live selectors before executing the extraction
+      (async () => {
+        if (typeof window.loadLiveSelectors === 'function') {
+          await window.loadLiveSelectors();
+        }
+        handleExtractSearchResults(sendResponse);
+      })();
       return true;
     }
   });
@@ -45,13 +51,9 @@
       // Fix: query inside the canonical results-list container only. As a
       // belt-and-suspenders second pass, drop any card that resolves to be
       // inside a "Recently viewed" subtree even if the scoping somehow misses.
-      const resultsRoot = document.querySelector(
-        'ol[data-search-results-list]'
-      ) || document.querySelector(
-        'div[data-search-results-list]'
-      ) || document.querySelector(
-        'div[data-search-results]'
-      ) || null;
+      const resultsRoot = safeQuery(document, 'etsySearch.resultsRoot1', false) || 
+                          safeQuery(document, 'etsySearch.resultsRoot2', false) || 
+                          safeQuery(document, 'etsySearch.resultsRoot3', false) || null;
 
       // Identify the "Recently viewed" subtree by its heading and exclude any
       // cards descending from it. We don't rely on a stable data-* attribute
@@ -75,9 +77,9 @@
       };
 
       const queryRoot = resultsRoot || document;
-      let cards = queryRoot.querySelectorAll('div.v2-listing-card[data-listing-id]');
+      let cards = safeQueryAll(queryRoot, 'etsySearch.listingCard');
       if (cards.length === 0) {
-        cards = queryRoot.querySelectorAll('[data-listing-id]');
+        cards = safeQueryAll(queryRoot, 'etsySearch.listingCardFallback');
       }
       const rawCount = cards.length;
 
@@ -117,11 +119,11 @@
           // 2. Ad listings may have input[name="listing_source"][value="ads"] in their form
 
           // Strategy 1: Check for hidden input listing_source="ads" inside the card
-          const adSourceInput = card.querySelector('input[name="listing_source"][value="ads"]');
+          const adSourceInput = safeQuery(card, 'etsySearch.adInput', false);
           if (adSourceInput) continue;
 
           // Strategy 2: Card has ad-listing-title ID prefix on the h3 heading
-          if (card.querySelector('[id^="ad-listing-title-"]')) continue;
+          if (safeQuery(card, 'etsySearch.adTitle', false)) continue;
 
           // Skip duplicates
           if (seenIds.has(listingId)) continue;
@@ -137,7 +139,7 @@
           const cardTextLower = cardText.toLowerCase();
 
           // ─── URL ───
-          const mainLink = card.querySelector('a[href*="/listing/"]');
+          const mainLink = safeQuery(card, 'etsySearch.mainLink', false);
           listing.etsy_url = mainLink ? mainLink.href.split('?')[0] : '';
 
           // ─── Thumbnail URL ───
@@ -193,10 +195,10 @@
           listing.original_price = null;
           listing.discount_pct = null;
 
-          const priceContainer = card.querySelector('.n-listing-card__price');
+          const priceContainer = safeQuery(card, 'etsySearch.priceContainer', false);
           if (priceContainer) {
             // Method A: Parse screen-reader-only text (most reliable for sale items)
-            const srTexts = priceContainer.querySelectorAll('.wt-screen-reader-only');
+            const srTexts = safeQueryAll(priceContainer, 'etsySearch.screenReaderText');
             let salePrice = null, origPrice = null;
             for (const sr of srTexts) {
               const txt = sr.textContent.trim();
@@ -216,7 +218,7 @@
 
             // Method B: If no sale text, get price from currency-value spans
             if (!listing.price) {
-              const currencyValues = priceContainer.querySelectorAll('span.currency-value');
+              const currencyValues = safeQueryAll(priceContainer, 'etsySearch.currencyValue');
               const prices = [];
               for (const cv of currencyValues) {
                 const val = parseFloat(cv.textContent.replace(/[^0-9.]/g, ''));
@@ -261,10 +263,10 @@
           // Also: <span class="wt-text-title-small">4.9</span> for the rating number
           //        <p class="wt-text-body-smaller">(31.4k)</p> for the review count display
           listing.shop_rating = null;
-          listing.shop_reviews = 0;
+          listing.shop_reviews = null;
 
           // Strategy 1 (PRIMARY): aria-label on role="img" element
-          const ratingImgEl = card.querySelector('[role="img"][aria-label*="star rating"]');
+          const ratingImgEl = safeQuery(card, 'etsySearch.ratingImg', false);
           if (ratingImgEl) {
             const label = ratingImgEl.getAttribute('aria-label') || '';
             const combined = label.match(/([0-9]+(?:\.[0-9]+)?)\s*star\s*rating\s*with\s*([0-9,.]+[kK]?)\s*reviews?/i);
@@ -277,15 +279,15 @@
           // Strategy 2: If aria-label not found, try the visible text elements
           if (!listing.shop_rating) {
             // Rating from span.wt-text-title-small inside the rating area
-            const ratingArea = card.querySelector('.shop-name-with-rating, .streamline-spacing-shop-rating');
+            const ratingArea = safeQuery(card, 'etsySearch.ratingArea', false);
             if (ratingArea) {
-              const ratingSpan = ratingArea.querySelector('span.wt-text-title-small');
+              const ratingSpan = safeQuery(ratingArea, 'etsySearch.ratingSpan', false);
               if (ratingSpan) {
                 const val = parseFloat(ratingSpan.textContent.trim());
                 if (val > 0 && val <= 5) listing.shop_rating = val;
               }
               // Review count from "(Xk)" or "(X,XXX)" pattern
-              const reviewP = ratingArea.querySelector('p.wt-text-body-smaller');
+              const reviewP = safeQuery(ratingArea, 'etsySearch.reviewP', false);
               if (reviewP) {
                 const inner = reviewP.textContent.replace(/[()]/g, '').trim();
                 listing.shop_reviews = parseReviewCount(inner);
@@ -480,8 +482,12 @@
 
       sendResponse({ success: true, listings, totalFound: listings.length });
     } catch (err) {
+      if (typeof catchError === 'function') {
+        catchError(err, 'etsy-search-extractor');
+      } else {
+        console.error('[Etsy Search Extractor] Failure:', err);
+      }
       sendResponse({ success: false, error: err.message, listings: [] });
-      sendTelemetryReport(err, null);
     }
   }
 
@@ -489,19 +495,24 @@
     try {
       const storageRes = await chrome.storage.local.get('config');
       const config = storageRes.config || {};
+      if (!config.share_telemetry) return;
       const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
       const reportUrl = `${baseUrl}/api/telemetry/report`;
       
-      const domSnippet = card ? card.outerHTML.substring(0, 2000) : document.body.innerHTML.substring(0, 2000);
+      let cleanUrl = 'etsy-search';
+      try {
+        const u = new URL(window.location.href);
+        cleanUrl = u.origin + u.pathname;
+      } catch (e) {}
       
       await fetch(reportUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           error_message: `Selector/Parsing failure: ${err.message || String(err)}`,
-          stack_trace: `${err.stack || ''}\n\nDOM Snippet:\n${domSnippet}`,
-          url: window.location.href,
-          user_agent: navigator.userAgent
+          stack_trace: `Location: etsy-search-extractor.js`,
+          url: cleanUrl,
+          user_agent: 'Etsy Research Pro Extension'
         })
       });
     } catch (e) {

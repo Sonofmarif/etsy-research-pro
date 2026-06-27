@@ -8,16 +8,22 @@
     try {
       const storageRes = await chrome.storage.local.get('config');
       const config = storageRes.config || {};
+      if (!config.share_telemetry) return;
       const baseUrl = config.worker_url || 'https://etsy-research-pro.sonofmarif.workers.dev';
       const reportUrl = `${baseUrl}/api/telemetry/report`;
 
+      let cleanUrl = 'erank-listing-audit';
+      try {
+        const u = new URL(window.location.href);
+        cleanUrl = u.origin + u.pathname;
+      } catch (e) {}
+
       const errorState = {
         error_message: err.message || String(err),
-        stack_trace: err.stack || '',
-        url: window.location.href,
-        user_agent: navigator.userAgent,
-        time: new Date().toISOString(),
-        ...context
+        stack_trace: 'Location: erank-listing-audit-extractor.js',
+        url: cleanUrl,
+        user_agent: 'Etsy Research Pro Extension',
+        time: new Date().toISOString()
       };
 
       await fetch(reportUrl, {
@@ -31,6 +37,11 @@
   }
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    // Attempt to load live selectors on first message
+    if (typeof window.loadLiveSelectors === 'function') {
+      window.loadLiveSelectors();
+    }
+
     if (msg.action === 'extractListingAudit') {
       handleExtractAudit(sendResponse);
       return true;
@@ -47,33 +58,19 @@
       // that may not appear cleanly in innerText. Check multiple DOM patterns first.
 
       // 1. Look for the eRank score gauge — typically a large number inside a circular SVG or canvas
-      const gaugeSelectors = [
-        '.listing-score-value', '.score-value', '.gauge-value',
-        '.score-circle .value', '.listing-audit-score',
-        '[class*="gauge"] [class*="value"]',
-        '[class*="score-num"]', '[class*="scoreNum"]',
-        '.overall-score', '[class*="overall"] [class*="score"]',
-        '[class*="listing-score"]',
-        // eRank often uses Bootstrap-style or custom progress circles
-        '.progress-circle .value', '.circular-chart .value',
-        '[class*="CircularProgress"] [class*="label"]',
-        '[class*="donut"] [class*="value"]',
-      ];
-      for (const sel of gaugeSelectors) {
-        try {
-          const els = document.querySelectorAll(sel);
+      try {
+        const els = safeQueryAll(document, 'erankAudit.gaugeSelectors');
           for (const el of els) {
             const text = el.textContent.trim().replace(/[^0-9]/g, '');
             const num = parseInt(text);
             if (num > 0 && num <= 100) { data.erank_score = num; break; }
           }
-          if (data.erank_score) break;
-        } catch(e) {}
-      }
+        }
+      } catch(e) {}
 
       // 2. Look for any element whose text is JUST a number 0-100 near a "Score" heading
       if (!data.erank_score) {
-        const allEls = document.querySelectorAll('h1, h2, h3, h4, h5, .display-1, .display-2, .display-3, .display-4, [class*="score"], [class*="Score"], [class*="grade"], [class*="Grade"], [class*="rating"], span, div, p, strong, b');
+        const allEls = safeQueryAll(document, 'erankAudit.allEls');
         for (const el of allEls) {
           // Only check elements whose own text (excluding children) looks like a bare number
           const directText = Array.from(el.childNodes)
@@ -161,7 +158,7 @@
 
       // Tags list — look for a tags section
       const tags = [];
-      const tagElements = document.querySelectorAll('[class*="tag"], .badge, .label, [class*="Tag"]');
+      const tagElements = safeQueryAll(document, 'erankAudit.tagElements');
       tagElements.forEach(el => {
         const text = el.textContent.trim();
         if (text && text.length > 1 && text.length < 60 && !text.match(/^\d+$/) && !text.includes('Score')) {

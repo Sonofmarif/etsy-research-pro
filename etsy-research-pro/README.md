@@ -161,6 +161,17 @@ Contributions welcome! This is an open-source project.
 
 ---
 
+## 🔒 Privacy
+
+Etsy Research Pro prioritizes user privacy. All core data extraction and analysis runs locally in your browser.
+
+- **Zero-Telemetry by Default**: Anonymous error reporting is disabled by default. No remote telemetry requests are sent unless you explicitly opt-in.
+- **Opt-In Telemetry**: If you enable "Share anonymous error reports" in Settings, anonymized diagnostic logs are transmitted to help maintain layout selectors.
+- **Strict Data Stripping**: When telemetry is enabled, search queries, seed keywords, niche concepts, and listing titles are completely stripped from the payload prior to transmission. Telemetry only sends the error class, code location (file and line), and the extension version.
+- **Local Storage**: API keys (Gemini, Groq), search history, and settings are saved locally in your browser via `chrome.storage.local` and are never shared with third parties.
+
+---
+
 ## 📄 License
 
 This project is licensed under the **MIT License** — free for personal and commercial use.

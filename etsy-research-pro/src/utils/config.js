@@ -6,6 +6,7 @@ const DEFAULT_CONFIG = {
   ai_provider: 'none', // 'gemini', 'groq', or 'none'
   gemini_api_key: '',
   groq_api_key: '',
+  share_telemetry: false,
 
   // Scraping settings
   max_listings_per_scan: 50,
