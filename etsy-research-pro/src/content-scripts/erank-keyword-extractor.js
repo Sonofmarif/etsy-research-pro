@@ -73,20 +73,27 @@
   });
 
   function handleCheckLogin(sendResponse) {
-    // Check for login form vs keyword tool interface
+    let isMembersDomain = false;
+    try {
+      isMembersDomain = window.location.hostname === 'members.erank.com';
+    } catch(e) {}
+    
+    // Look for logged-in UI elements
+    const hasSidebarLinks = !!document.querySelector('a[href*="/keyword-tool"], a[href*="#user-profile"], .sidebar-menu, nav');
+    const bodyText = document.body.innerText || '';
+    const hasDashboardText = bodyText.includes('Dashboard');
+    
+    // Negative signals
     const loginForm = safeQuery(document, 'erankKeyword.loginForm', false);
-    const keywordTool = safeQuery(document, 'erankKeyword.keywordTool', false);
-
-    // Also check page text for common indicators
-    const bodyText = document.body.innerText.toLowerCase();
-    const hasLoginIndicators = bodyText.includes('sign in') && bodyText.includes('password') && !bodyText.includes('keyword explorer');
-    const hasToolIndicators = bodyText.includes('avg searches') || bodyText.includes('keyword explorer') || bodyText.includes('etsy competition');
-
-    if (loginForm && !keywordTool) {
-      sendResponse({ loggedIn: false });
-    } else if (hasLoginIndicators && !hasToolIndicators) {
+    const hasLoginIndicators = bodyText.toLowerCase().includes('sign in') && bodyText.toLowerCase().includes('password') && !hasDashboardText;
+    
+    // Accept if on members.erank.com with sidebar/dashboard, OR if on members domain without a prominent login form
+    if (isMembersDomain && (hasSidebarLinks || hasDashboardText || (!loginForm && !hasLoginIndicators))) {
+      sendResponse({ loggedIn: true });
+    } else if (loginForm || hasLoginIndicators) {
       sendResponse({ loggedIn: false });
     } else {
+      // Fallback
       sendResponse({ loggedIn: true });
     }
   }
