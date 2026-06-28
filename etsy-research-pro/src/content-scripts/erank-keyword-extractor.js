@@ -74,26 +74,43 @@
 
   function handleCheckLogin(sendResponse) {
     let isMembersDomain = false;
+    let isKeywordToolPath = false;
     try {
       isMembersDomain = window.location.hostname === 'members.erank.com';
+      isKeywordToolPath = window.location.pathname.startsWith('/keyword-tool');
     } catch(e) {}
-    
-    // Look for logged-in UI elements
-    const hasSidebarLinks = !!document.querySelector('a[href*="/keyword-tool"], a[href*="#user-profile"], .sidebar-menu, nav');
+
+    // Fast path: if we're on members.erank.com/keyword-tool, the user is logged in
+    // (eRank redirects to /login if no session exists)
+    if (isMembersDomain && isKeywordToolPath) {
+      sendResponse({ loggedIn: true });
+      return;
+    }
+
+    // Look for structural elements only visible to authenticated users
+    const hasSidebar = !!document.querySelector('.sidebar, .sidebar-menu, [class*="sidebar"], [class*="Sidebar"]');
+    const hasNavLinks = !!document.querySelector('a[href*="keyword-tool"], a[href*="/dashboard"], a[href*="/tools"]');
+    const hasUserProfile = !!document.querySelector('#user-profile, [class*="user-menu"], [class*="UserMenu"], [class*="account"]');
+    const hasAuthenticatedUI = hasSidebar || hasNavLinks || hasUserProfile;
+
     const bodyText = document.body.innerText || '';
     const hasDashboardText = bodyText.includes('Dashboard');
-    
-    // Negative signals
+
+    // Negative signals — explicit login form presence
     const loginForm = safeQuery(document, 'erankKeyword.loginForm', false);
-    const hasLoginIndicators = bodyText.toLowerCase().includes('sign in') && bodyText.toLowerCase().includes('password') && !hasDashboardText;
-    
-    // Accept if on members.erank.com with sidebar/dashboard, OR if on members domain without a prominent login form
-    if (isMembersDomain && (hasSidebarLinks || hasDashboardText || (!loginForm && !hasLoginIndicators))) {
+    const lowerBody = bodyText.toLowerCase();
+    const hasLoginIndicators = lowerBody.includes('sign in') && lowerBody.includes('password') && !hasDashboardText;
+
+    // Decision tree
+    if (isMembersDomain && (hasAuthenticatedUI || hasDashboardText)) {
+      sendResponse({ loggedIn: true });
+    } else if (isMembersDomain && !loginForm && !hasLoginIndicators) {
+      // On members subdomain with no login form visible — trust the session
       sendResponse({ loggedIn: true });
     } else if (loginForm || hasLoginIndicators) {
       sendResponse({ loggedIn: false });
     } else {
-      // Fallback
+      // Fallback: not on members domain, no clear signal — assume OK
       sendResponse({ loggedIn: true });
     }
   }

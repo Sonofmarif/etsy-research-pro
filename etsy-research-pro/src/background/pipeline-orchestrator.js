@@ -1105,6 +1105,19 @@ export async function checkErankLogin(tabId) {
   await navigateTab(tabId, 'https://members.erank.com/keyword-tool');
   await sleep(5000);
 
+  // URL-level pre-check: eRank redirects unauthenticated users away from
+  // /keyword-tool (to /login or /). If the tab URL still contains
+  // members.erank.com/keyword-tool, the session is valid.
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab && tab.url && tab.url.includes('members.erank.com/keyword-tool')) {
+      await log('success', 'eRank is logged in (URL confirmed on members.erank.com/keyword-tool)');
+      return true;
+    }
+  } catch (urlErr) {
+    // Non-fatal — fall through to content-script check
+  }
+
   try {
     const response = await sendToTab(tabId, { action: 'checkErankLogin' });
     if (response && response.loggedIn) {
@@ -1117,6 +1130,14 @@ export async function checkErankLogin(tabId) {
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);
     if (/receiving end does not exist|could not establish connection/i.test(msg)) {
+      // Content script not loaded — check URL as last resort
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (tab && tab.url && tab.url.includes('members.erank.com')) {
+          await log('success', 'eRank is logged in (URL fallback — content script unavailable)');
+          return true;
+        }
+      } catch (_) {}
       await log('error', 'eRank is NOT logged in — please log in and retry');
       return false;
     }

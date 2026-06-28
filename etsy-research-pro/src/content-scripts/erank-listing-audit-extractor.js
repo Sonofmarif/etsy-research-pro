@@ -60,11 +60,10 @@
       // 1. Look for the eRank score gauge — typically a large number inside a circular SVG or canvas
       try {
         const els = safeQueryAll(document, 'erankAudit.gaugeSelectors');
-          for (const el of els) {
-            const text = el.textContent.trim().replace(/[^0-9]/g, '');
-            const num = parseInt(text);
-            if (num > 0 && num <= 100) { data.erank_score = num; break; }
-          }
+        for (const el of els) {
+          const text = el.textContent.trim().replace(/[^0-9]/g, '');
+          const num = parseInt(text);
+          if (num > 0 && num <= 100) { data.erank_score = num; break; }
         }
       } catch(e) {}
 

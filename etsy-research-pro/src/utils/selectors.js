@@ -82,8 +82,11 @@ window.loadLiveSelectors = async function() {
         }
       }
       console.log('[Selectors] Live registry loaded successfully.');
+    } else {
+      console.log('[Selectors] Registry: Using built-in local fallback selectors');
     }
   } catch (e) {
-    console.warn('[Selectors] Failed to load live selectors, using defaults.', e.message);
+    // Silently swallow — the pipeline must proceed with hardcoded defaults
+    console.log('[Selectors] Registry: Using built-in local fallback selectors');
   }
 };
