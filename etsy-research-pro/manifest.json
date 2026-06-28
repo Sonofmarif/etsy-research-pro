@@ -29,6 +29,7 @@
       "matches": ["https://members.erank.com/*"],
       "js": [
         "src/utils/selectors.js",
+        "src/utils/error-handler.js",
         "src/content-scripts/erank-keyword-extractor.js",
         "src/content-scripts/erank-listing-audit-extractor.js"
       ],
